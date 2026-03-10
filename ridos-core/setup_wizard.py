@@ -40,7 +40,7 @@ API_KEY_FILE  = "/etc/ridos/api.key"
 CONFIG_FILE   = "/etc/ridos/config.json"
 FLAG_FILE     = "/etc/ridos/.setup_complete"   # exists = already configured
 VERSION       = "1.1.0"
-CODENAME      = "Basra"
+CODENAME      = "Baghdad"
 
 
 # ── Helpers ───────────────────────────────────────────────────

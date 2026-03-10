@@ -38,7 +38,7 @@ title-text: ""
 }
 
 + label {
-  text = "v1.1.0  \"Basra\"  |  Copyright (C) 2026 RIDOS OS Project"
+  text = "v1.1.0  \"Baghdad\"  |  Copyright (C) 2026 RIDOS OS Project"
   top = 23%
   left = 0
   width = 100%

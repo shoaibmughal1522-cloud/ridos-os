@@ -17,15 +17,15 @@ echo "ridos-os" > /etc/hostname
 echo "RIDOS_VERSION=1.1.0"       > /etc/ridos/version
 echo "RIDOS_BUILD_DATE=$(date +%Y-%m-%d)" >> /etc/ridos/version
 echo "RIDOS_ARCH=$(uname -m)"    >> /etc/ridos/version
-echo "RIDOS_CODENAME=Basra"      >> /etc/ridos/version
+echo "RIDOS_CODENAME=Baghdad"      >> /etc/ridos/version
 
 # ── 2. /etc/os-release ────────────────────────────────────────
 cat > /etc/os-release << 'EOF'
 NAME="RIDOS OS"
-VERSION="1.1.0 (Basra)"
+VERSION="1.1.0 (Baghdad)"
 ID=ridos
 ID_LIKE=debian
-PRETTY_NAME="RIDOS OS 1.1.0 (Basra)"
+PRETTY_NAME="RIDOS OS 1.1.0 (Baghdad)"
 VERSION_ID="1.1"
 HOME_URL="https://github.com/ridos-os/ridos-os"
 SUPPORT_URL="https://github.com/ridos-os/ridos-os/issues"
@@ -43,7 +43,7 @@ cat > /etc/issue << 'EOF'
   ██║  ██║██║██████╔╝╚██████╔╝███████║
   ╚═╝  ╚═╝╚═╝╚═════╝  ╚═════╝ ╚══════╝
 
-  RIDOS OS v1.1.0 "Basra"
+  RIDOS OS v1.1.0 "Baghdad"
   Retro Intelligent Desktop OS for IT Professionals
 
   Copyright (C) 2026 RIDOS OS Project — GPL v3
@@ -78,7 +78,7 @@ chmod 600 /etc/ridos/api.key
 cat > /etc/ridos/config.json << 'RCONF'
 {
   "version": "1.1.0",
-  "codename": "Basra",
+  "codename": "Baghdad",
   "online_model": "claude-haiku-4-5-20251001",
   "max_tokens": 512,
   "temperature": 0.7,

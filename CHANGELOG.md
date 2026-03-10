@@ -5,7 +5,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [1.1.0] — 2026-03-XX — "Basra"
+## [1.1.0] — 2026-03-XX — "Baghdad"
 
 ### Added
 - Debian bookworm base (replaces Alpine Linux)

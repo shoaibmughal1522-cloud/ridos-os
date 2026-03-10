@@ -14,7 +14,7 @@ W = "\033[97m";  D  = "\033[2m";  BD = "\033[1m"
 X = "\033[0m"
 
 VERSION   = "1.1.0"
-CODENAME  = "Basra"
+CODENAME  = "Baghdad"
 SOCKET    = "/run/ridos.sock"
 
 BANNER = f"""

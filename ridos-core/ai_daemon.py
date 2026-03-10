@@ -30,7 +30,7 @@ MAX_TOKENS    = 512
 CACHE_SIZE    = 30
 RATE_LIMIT    = 15  # requests per minute
 
-SYSTEM_PROMPT = """You are RIDOS, an AI assistant built into RIDOS OS v1.1 "Basra" — 
+SYSTEM_PROMPT = """You are RIDOS, an AI assistant built into RIDOS OS v1.1 "Baghdad" — 
 a professional Linux distribution for IT specialists, network engineers, and developers.
 
 You have deep knowledge of:

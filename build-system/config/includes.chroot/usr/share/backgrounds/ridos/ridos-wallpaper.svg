@@ -103,7 +103,7 @@
         font-family="'Courier New', monospace"
         font-size="13" letter-spacing="6"
         fill="#9333ea" text-anchor="middle" opacity="0.8">
-    RETRO INTELLIGENT DESKTOP OS  ·  v1.1.0 "Basra"
+    RETRO INTELLIGENT DESKTOP OS  ·  v1.1.0 "Baghdad"
   </text>
 
   <!-- Bottom bar -->
@@ -113,7 +113,7 @@
         font-family="'Courier New', monospace"
         font-size="10" letter-spacing="2"
         fill="#581c87" text-anchor="middle">
-    Copyright (C) 2026 RIDOS OS Project  ·  GPL v3  ·  github.com/alexeaiskinder-mea/ridos-os
+    Copyright (C) 2026 RIDOS OS Project  ·  GPL v3  ·  github.com/ridos-os-project/ridos-os
   </text>
 
   <rect width="1920" height="1080" fill="url(#scanlines)" opacity="0.4"/>

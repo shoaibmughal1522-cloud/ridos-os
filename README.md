@@ -1,5 +1,5 @@
 # RIDOS OS
-### Retro Intelligent Desktop Operating System — v1.1.0 "Basra"
+### Retro Intelligent Desktop Operating System — v1.1.0 "Baghdad"
 
 [![Build ISO](https://github.com/ridos-os/ridos-os/actions/workflows/build-iso.yml/badge.svg)](https://github.com/ridos-os/ridos-os/actions)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)

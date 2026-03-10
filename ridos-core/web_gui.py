@@ -2,7 +2,7 @@
 ╔══════════════════════════════════════════════════════════════╗
 ║  RIDOS OS v1.1 — Web GUI                                    ║
 ║  Copyright (C) 2026 RIDOS OS Project — GPL v3               ║
-║  https://github.com/alexeaiskinder-mea/ridos-os             ║
+║  https://github.com/ridos-os-project/ridos-os             ║
 ╚══════════════════════════════════════════════════════════════╝
 
 Browser-based AI dashboard accessible on port 8080.
@@ -24,7 +24,7 @@ from flask import Flask, render_template_string, request, jsonify
 from flask_socketio import SocketIO, emit
 
 VERSION  = "1.1.0"
-CODENAME = "Basra"
+CODENAME = "Baghdad"
 PORT     = 8080
 SOCKET_PATH = "/run/ridos.sock"
 
