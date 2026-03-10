@@ -538,7 +538,7 @@ git --version
     <div class="cb-header"><span class="cb-lang">bash — Configure your identity (do this once)</span><button class="cb-copy" onclick="cp(this)">Copy</button></div>
     <div class="cb-body"><span class="cm"># Replace with YOUR name and email</span>
 git config --global user.name  <span class="st">"Your Name"</span>
-git config --global user.email <span class="st">"your@email.com"</span>
+git config --global user.email <span class="st">"<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="7801170d0a381d15191114561b1715">[email&#160;protected]</a>"</span>
 
 <span class="cm"># Set default branch name to 'main'</span>
 git config --global init.defaultBranch main
@@ -554,7 +554,7 @@ git config --list</div>
   <div class="code-block">
     <div class="cb-header"><span class="cb-lang">bash — Generate SSH key for GitHub authentication</span><button class="cb-copy" onclick="cp(this)">Copy</button></div>
     <div class="cb-body"><span class="cm"># Generate Ed25519 key (modern, secure)</span>
-ssh-keygen -t ed25519 -C <span class="st">"your@email.com"</span> -f ~/.ssh/github_ridos
+ssh-keygen -t ed25519 -C <span class="st">"<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="156c7a6067557078747c793b767a78">[email&#160;protected]</a>"</span> -f ~/.ssh/github_ridos
 
 <span class="cm"># Start ssh-agent and add key</span>
 eval <span class="st">"$(ssh-agent -s)"</span>
@@ -568,20 +568,20 @@ cat ~/.ssh/github_ridos.pub</div>
     <div class="ac-icon">🔑</div>
     <div>
       <div class="ac-title">Add SSH key to GitHub</div>
-      <div class="ac-body">Copy the output of <code>cat ~/.ssh/github_ridos.pub</code> → go to <code>GitHub → Settings → SSH and GPG keys → New SSH key</code> → Title: "RIDOS Build Machine" → Paste key → Save. Then test: <code>ssh -T git@github.com</code></div>
+      <div class="ac-body">Copy the output of <code>cat ~/.ssh/github_ridos.pub</code> → go to <code>GitHub → Settings → SSH and GPG keys → New SSH key</code> → Title: "RIDOS Build Machine" → Paste key → Save. Then test: <code>ssh -T <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="16717f6256717f627e63743875797b">[email&#160;protected]</a></code></div>
     </div>
   </div>
 
   <div class="code-block">
     <div class="cb-header"><span class="cb-lang">bash — Test GitHub SSH connection</span><button class="cb-copy" onclick="cp(this)">Copy</button></div>
-    <div class="cb-body">ssh -T git@github.com
+    <div class="cb-body">ssh -T <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="c6a1afb286a1afb2aeb3a4e8a5a9ab">[email&#160;protected]</a>
 <span class="cm"># Expected: Hi YOUR-USERNAME! You've successfully authenticated...</span></div>
   </div>
 
   <ul class="checklist">
     <li><div class="chk" onclick="tick(this)"></div><div class="cl-text"><span class="tag tag-req">Required</span> <strong>Git installed and configured</strong> (name + email)</div></li>
     <li><div class="chk" onclick="tick(this)"></div><div class="cl-text"><span class="tag tag-req">Required</span> <strong>SSH key added to GitHub account</strong></div></li>
-    <li><div class="chk" onclick="tick(this)"></div><div class="cl-text"><span class="tag tag-req">Required</span> <strong>ssh -T git@github.com returns success</strong></div></li>
+    <li><div class="chk" onclick="tick(this)"></div><div class="cl-text"><span class="tag tag-req">Required</span> <strong>ssh -T <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="72151b0632151b061a07105c111d1f">[email&#160;protected]</a> returns success</strong></div></li>
   </ul>
 
   <div class="nav-row">
@@ -720,13 +720,13 @@ Copyright (C) 2026 RIDOS OS Project — GPL v3"</span></div>
   <div class="code-block">
     <div class="cb-header"><span class="cb-lang">bash — Connect local repo to GitHub</span><button class="cb-copy" onclick="cp(this)">Copy</button></div>
     <div class="cb-body"><span class="cm"># Replace YOUR-USERNAME with your GitHub username</span>
-git remote add origin git@github.com:<span class="hl">YOUR-USERNAME</span>/ridos-os.git
+git remote add origin <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="096e607d496e607d617c6b276a6664">[email&#160;protected]</a>:<span class="hl">YOUR-USERNAME</span>/ridos-os.git
 
 <span class="cm"># Verify the remote was added correctly</span>
 git remote -v
 <span class="cm"># Should show:
-# origin  git@github.com:YOUR-USERNAME/ridos-os.git (fetch)
-# origin  git@github.com:YOUR-USERNAME/ridos-os.git (push)</span>
+# origin  <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="d0b7b9a490b7b9a4b8a5b2feb3bfbd">[email&#160;protected]</a>:YOUR-USERNAME/ridos-os.git (fetch)
+# origin  <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="fe99978abe99978a968b9cd09d9193">[email&#160;protected]</a>:YOUR-USERNAME/ridos-os.git (push)</span>
 
 <span class="cm"># Push your first commit</span>
 git push -u origin main</div>
@@ -962,7 +962,7 @@ gh api repos/<span class="hl">YOUR-USERNAME</span>/ridos-os/branches/main/protec
 - General: DuckDuckGo Instant Answer API (no API key needed)
 
 Closes #12
-Co-authored-by: Contributor Name &lt;email@example.com&gt;"</span></div>
+Co-authored-by: Contributor Name &lt;<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="b8ddd5d9d1d4f8ddc0d9d5c8d4dd96dbd7d5">[email&#160;protected]</a>&gt;"</span></div>
   </div>
 
   <div class="nav-row">
@@ -979,43 +979,10 @@ Co-authored-by: Contributor Name &lt;email@example.com&gt;"</span></div>
   <span style="font-family:'JetBrains Mono',monospace; color:var(--blue); font-size:11px;">github.com/YOUR-USERNAME/ridos-os</span>
 </footer>
 
-<script>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
   let currentStep = 1;
   const TOTAL = 8;
   let completedSteps = new Set();
 
   function goStep(n) {
     document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
-    document.querySelectorAll('.sb-item').forEach(s => s.classList.remove('active'));
-    document.getElementById('step-' + n).classList.add('active');
-    document.getElementById('sb-' + n)?.classList.add('active');
-    currentStep = n;
-    completedSteps.add(n);
-    updateProgress();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
-
-  function tick(el) {
-    el.classList.toggle('checked');
-    updateProgress();
-  }
-
-  function updateProgress() {
-    const total = document.querySelectorAll('.chk').length;
-    const done  = document.querySelectorAll('.chk.checked').length;
-    const pct   = total > 0 ? Math.round((done / total) * 100) : 0;
-    document.getElementById('prog-fill').style.width  = pct + '%';
-    document.getElementById('prog-label').textContent = done + ' / ' + total;
-  }
-
-  function cp(btn) {
-    const code = btn.closest('.code-block').querySelector('.cb-body').textContent;
-    navigator.clipboard.writeText(code.trim()).then(() => {
-      btn.textContent = 'Copied!';
-      btn.classList.add('ok');
-      setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('ok'); }, 2000);
-    });
-  }
-</script>
-</body>
-</html>

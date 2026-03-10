@@ -1,6 +1,9 @@
+# RIDOS OS v1.1 — Plymouth Theme
+# Copyright (C) 2026 RIDOS OS Project — GPL v3
+
 [Plymouth Theme]
 Name=RIDOS OS
-Description=RIDOS OS v1.1 dark purple boot splash
+Description=RIDOS OS v1.1 Dark Purple Boot Splash
 ModuleName=script
 
 [script]
