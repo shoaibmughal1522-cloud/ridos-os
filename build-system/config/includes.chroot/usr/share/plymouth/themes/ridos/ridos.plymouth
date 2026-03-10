@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=RIDOS OS
+Description=RIDOS OS v1.1 dark purple boot splash
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/ridos
+ScriptFile=/usr/share/plymouth/themes/ridos/ridos.script

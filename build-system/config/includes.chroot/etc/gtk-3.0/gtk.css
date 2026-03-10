@@ -1,0 +1,137 @@
+/*
+ * RIDOS OS v1.1 — GTK3 Theme Override
+ * Copyright (C) 2026 RIDOS OS Project — GPL v3
+ *
+ * Applied on top of Greybird-dark to give RIDOS
+ * its distinctive dark purple identity.
+ *
+ * Location: /etc/gtk-3.0/gtk.css
+ */
+
+/* ── Color variables ── */
+@define-color ridos_bg         #0f0820;
+@define-color ridos_bg2        #1a0f35;
+@define-color ridos_bg3        #251545;
+@define-color ridos_purple     #7c3aed;
+@define-color ridos_purple_lt  #a855f7;
+@define-color ridos_text       #e9d5ff;
+@define-color ridos_muted      #9333ea;
+@define-color ridos_border     #3b1a6b;
+@define-color ridos_accent     #c084fc;
+
+/* ── Window background ── */
+window, .background {
+  background-color: @ridos_bg;
+  color: @ridos_text;
+}
+
+/* ── Titlebar ── */
+headerbar, .titlebar {
+  background-color: @ridos_bg2;
+  border-bottom: 1px solid @ridos_border;
+  color: @ridos_text;
+}
+headerbar:backdrop {
+  background-color: @ridos_bg;
+}
+
+/* ── Buttons ── */
+button {
+  background-color: @ridos_bg3;
+  border: 1px solid @ridos_border;
+  color: @ridos_text;
+  border-radius: 4px;
+}
+button:hover {
+  background-color: @ridos_purple;
+  border-color: @ridos_purple_lt;
+  color: #ffffff;
+}
+button:active, button:checked {
+  background-color: @ridos_purple_lt;
+  color: #ffffff;
+}
+
+/* ── Selected items ── */
+selection, *:selected {
+  background-color: @ridos_purple;
+  color: #ffffff;
+}
+
+/* ── Entry / text input ── */
+entry {
+  background-color: @ridos_bg2;
+  border: 1px solid @ridos_border;
+  color: @ridos_text;
+  border-radius: 4px;
+}
+entry:focus {
+  border-color: @ridos_purple;
+  box-shadow: 0 0 0 2px alpha(@ridos_purple, 0.3);
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  background-color: @ridos_bg2;
+  border-right: 1px solid @ridos_border;
+}
+
+/* ── Menu ── */
+menu, menubar {
+  background-color: @ridos_bg2;
+  border: 1px solid @ridos_border;
+  color: @ridos_text;
+}
+menuitem:hover {
+  background-color: @ridos_purple;
+  color: #ffffff;
+}
+
+/* ── Scrollbar ── */
+scrollbar slider {
+  background-color: @ridos_border;
+  border-radius: 6px;
+}
+scrollbar slider:hover {
+  background-color: @ridos_purple;
+}
+
+/* ── Notebook tabs ── */
+notebook tab {
+  background-color: @ridos_bg2;
+  border: 1px solid @ridos_border;
+  color: @ridos_muted;
+  padding: 4px 12px;
+}
+notebook tab:checked {
+  background-color: @ridos_bg3;
+  border-bottom-color: @ridos_purple;
+  color: @ridos_text;
+}
+
+/* ── Progress bar ── */
+progressbar progress {
+  background-color: @ridos_purple;
+}
+progressbar trough {
+  background-color: @ridos_bg3;
+}
+
+/* ── Switches ── */
+switch:checked {
+  background-color: @ridos_purple;
+}
+
+/* ── Tooltip ── */
+tooltip {
+  background-color: @ridos_bg2;
+  border: 1px solid @ridos_border;
+  color: @ridos_text;
+}
+
+/* ── Terminal / monospace areas ── */
+.terminal-screen {
+  background-color: #080412;
+  color: @ridos_text;
+  font-family: "JetBrains Mono", "Monospace";
+}

@@ -1,0 +1,51 @@
+# ═══════════════════════════════════════════════════════════════
+# RIDOS OS v1.1 — Plymouth Boot Splash Script
+# Copyright (C) 2026 RIDOS OS Project — GPL v3
+# ═══════════════════════════════════════════════════════════════
+
+Window.SetBackgroundTopColor(0.04, 0.02, 0.09);
+Window.SetBackgroundBottomColor(0.06, 0.03, 0.13);
+
+# ── Logo ──────────────────────────────────────────────────────
+logo.image       = Image("ridos-logo.png");
+logo.sprite      = Sprite(logo.image);
+logo.sprite.SetX(Window.GetWidth()  / 2 - logo.image.GetWidth()  / 2);
+logo.sprite.SetY(Window.GetHeight() / 2 - logo.image.GetHeight() / 2 - 60);
+logo.sprite.SetOpacity(1);
+
+# ── Title text ────────────────────────────────────────────────
+title.image  = Image.Text("RIDOS OS", 0.77, 0.55, 0.99, 1, "Sans Bold 18");
+title.sprite = Sprite(title.image);
+title.sprite.SetX(Window.GetWidth()  / 2 - title.image.GetWidth()  / 2);
+title.sprite.SetY(Window.GetHeight() / 2 + 20);
+
+# ── Subtitle ──────────────────────────────────────────────────
+sub.image  = Image.Text("Retro Intelligent Desktop OS  v1.1.0", 0.43, 0.27, 0.61, 1, "Sans 10");
+sub.sprite = Sprite(sub.image);
+sub.sprite.SetX(Window.GetWidth()  / 2 - sub.image.GetWidth()  / 2);
+sub.sprite.SetY(Window.GetHeight() / 2 + 52);
+
+# ── Progress bar ──────────────────────────────────────────────
+progress_bar.original = Image("progress_bar.png");
+progress_bar.sprite   = Sprite();
+progress_bar.sprite.SetX(Window.GetWidth() / 2 - progress_bar.original.GetWidth() / 2);
+progress_bar.sprite.SetY(Window.GetHeight() / 2 + 90);
+progress_bar.width    = 0;
+
+fun progress_callback(duration, progress) {
+  progress_bar.width = Math.Int(progress * progress_bar.original.GetWidth());
+  if (progress_bar.width > 0) {
+    progress_bar.image  = progress_bar.original.Scale(progress_bar.width, progress_bar.original.GetHeight());
+    progress_bar.sprite.SetImage(progress_bar.image);
+  }
+}
+Plymouth.SetBootProgressFunction(progress_callback);
+
+# ── Password dialog ───────────────────────────────────────────
+fun password_callback(prompt, bullets) {
+  pw.image  = Image.Text("🔐 " + prompt, 0.77, 0.55, 0.99, 1, "Sans Bold 11");
+  pw.sprite = Sprite(pw.image);
+  pw.sprite.SetX(Window.GetWidth()  / 2 - pw.image.GetWidth() / 2);
+  pw.sprite.SetY(Window.GetHeight() / 2 + 130);
+}
+Plymouth.SetDisplayPasswordFunction(password_callback);
