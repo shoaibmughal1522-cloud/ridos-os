@@ -29,17 +29,12 @@ jobs:
 
       - name: Import Debian bookworm signing key
         run: |
-          # Import the exact key that debootstrap needs: F8D2585B8783D481
           sudo gpg --batch --no-tty \
             --keyserver hkps://keyserver.ubuntu.com \
             --recv-keys F8D2585B8783D481 || \
           sudo gpg --batch --no-tty \
-            --keyserver hkps://keys.openpgp.org \
-            --recv-keys F8D2585B8783D481 || \
-          sudo gpg --batch --no-tty \
             --keyserver hkp://keyserver.ubuntu.com:80 \
             --recv-keys F8D2585B8783D481
-          # Export to the keyring file used by debootstrap
           sudo gpg --batch --no-tty \
             --export F8D2585B8783D481 | \
           sudo tee -a /usr/share/keyrings/debian-archive-keyring.gpg > /dev/null
@@ -52,6 +47,10 @@ jobs:
           mkdir -p build-system/config/includes.chroot/etc/ridos
           mkdir -p build-system/config/package-lists
           mkdir -p build-system/config/hooks
+          # Disable apt Contents fetching to avoid 404 errors
+          mkdir -p build-system/config/archives
+          echo 'Acquire::IndexTargets::deb::Contents-deb::DefaultEnabled "false";' | \
+            sudo tee build-system/config/archives/no-contents.pref > /dev/null
 
       - name: Inject core files
         run: |
