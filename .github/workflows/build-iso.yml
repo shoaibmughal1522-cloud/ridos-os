@@ -47,6 +47,12 @@ jobs:
           mkdir -p build-system/config/includes.chroot/etc/ridos
           mkdir -p build-system/config/package-lists
           mkdir -p build-system/config/hooks
+          # Place apt.conf INSIDE the chroot to disable Contents fetching
+          mkdir -p build-system/config/includes.chroot/etc/apt/apt.conf.d
+          cat > build-system/config/includes.chroot/etc/apt/apt.conf.d/99no-contents << 'APTEOF'
+          Acquire::IndexTargets::deb::Contents-deb::DefaultEnabled "false";
+          Acquire::IndexTargets::deb-src::Contents-deb::DefaultEnabled "false";
+          APTEOF
 
       - name: Inject core files
         run: |
@@ -80,14 +86,6 @@ jobs:
             --firmware-chroot true \
             --apt-recommends false
           echo "configured"
-          # Patch live-build chroot_apt to ignore Contents 404
-          CHROOT_APT="/usr/lib/live/build/chroot_apt"
-          if [ -f "$CHROOT_APT" ]; then
-            sudo sed -i \
-              '/Contents-/s/^/# DISABLED: /' \
-              "$CHROOT_APT" 2>/dev/null || true
-            echo "chroot_apt patched"
-          fi
 
       - name: Build ISO
         run: |
