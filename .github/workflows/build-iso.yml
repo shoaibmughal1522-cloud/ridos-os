@@ -26,8 +26,6 @@ jobs:
             curl wget ca-certificates python3 librsvg2-bin \
             debian-archive-keyring gnupg2
           lb --version
-          # Show live-build scripts to debug
-          grep -r "Contents" /usr/lib/live/build/ 2>/dev/null | grep -v "Binary\|binary" | head -20
 
       - name: Import Debian bookworm signing key
         run: |
@@ -42,20 +40,21 @@ jobs:
           sudo tee -a /usr/share/keyrings/debian-archive-keyring.gpg > /dev/null
           echo "✓ Key imported"
 
-      - name: Patch live-build to skip Contents download
+      - name: Patch live-build for Debian compatibility
         run: |
-          # Find and patch the script that downloads Contents-amd64.gz
-          echo "=== Searching for Contents download in live-build ==="
-          grep -rn "Contents" /usr/lib/live/build/ 2>/dev/null || true
-          echo "=== All live-build scripts ==="
-          ls /usr/lib/live/build/
-          # Patch chroot_apt script - replace wget of Contents with true
-          for f in /usr/lib/live/build/*; do
-            if grep -q "Contents" "$f" 2>/dev/null; then
-              echo "Patching: $f"
-              sudo sed -i 's/wget.*Contents[^;]*/true # Contents disabled/g' "$f" || true
-            fi
+          # Find and patch all scripts that reference casper
+          echo "=== Scripts referencing casper ==="
+          grep -rln "casper" /usr/lib/live/build/ 2>/dev/null || true
+          # Replace casper with live-boot in all live-build scripts
+          for f in $(grep -rln "casper" /usr/lib/live/build/ 2>/dev/null); do
+            echo "Patching $f"
+            sudo sed -i 's/casper/live-boot/g' "$f"
           done
+          # Also patch Contents download
+          for f in $(grep -rln "Contents" /usr/lib/live/build/ 2>/dev/null); do
+            sudo sed -i 's/wget.*Contents[^ ]*/true/g' "$f" || true
+          done
+          echo "✓ Patched"
 
       - name: Prepare directories
         run: |
@@ -98,7 +97,7 @@ jobs:
             --linux-flavours amd64 \
             --firmware-binary true \
             --firmware-chroot true \
-            --apt-recommends false \
+            --apt-recommends false
           echo "configured"
 
       - name: Build ISO
