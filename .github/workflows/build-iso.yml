@@ -26,8 +26,6 @@ jobs:
             curl wget ca-certificates python3 librsvg2-bin \
             debian-archive-keyring gnupg2
           lb --version
-          echo "=== ALL live-build scripts ==="
-          ls /usr/lib/live/build/ | grep -i "linux\|chroot\|install"
 
       - name: Import Debian bookworm signing key
         run: |
@@ -47,21 +45,18 @@ jobs:
           for f in $(grep -rln "casper" /usr/lib/live/build/ 2>/dev/null); do
             sudo sed -i 's/casper/live-boot/g' "$f"
           done
-          echo "=== Scripts containing 'Contents' ==="
-          grep -rln "Contents" /usr/lib/live/build/ 2>/dev/null || echo "none"
-          # Patch the correct script: lb_chroot_linux-image (with lb_ prefix)
+          # Patch lb_chroot_linux-image to write apt.conf into chroot before apt-get update
           LB_LINUX="/usr/lib/live/build/lb_chroot_linux-image"
           if [ -f "$LB_LINUX" ]; then
-            echo "=== First 30 lines of lb_chroot_linux-image ==="
-            head -30 "$LB_LINUX"
-            # Insert apt config disable at line 2 of the script
-            sudo sed -i '2i # Disable Contents fetching\nmkdir -p "${CHROOT}/etc/apt/apt.conf.d" 2>/dev/null || true\necho '"'"'Acquire::IndexTargets::deb::Contents-deb::DefaultEnabled "false";'"'"' | sudo chroot "${CHROOT}" tee /etc/apt/apt.conf.d/99no-contents > /dev/null 2>&1 || true' "$LB_LINUX"
-            echo "✓ Patched $LB_LINUX"
-          else
-            echo "ERROR: $LB_LINUX not found!"
-            ls /usr/lib/live/build/ | grep linux
+            # Find the line with first Chroot_Apt or apt-get call and insert before it
+            LINENUM=$(grep -n "Chroot_Apt\|apt-get\|Apt " "$LB_LINUX" | head -1 | cut -d: -f1)
+            echo "First apt call at line $LINENUM"
+            if [ -n "$LINENUM" ]; then
+              sudo sed -i "${LINENUM}i # Disable Contents index\nmkdir -p \"\${CHROOT}/etc/apt/apt.conf.d\"\necho 'Acquire::IndexTargets::deb::Contents-deb::DefaultEnabled \"false\";' > \"\${CHROOT}/etc/apt/apt.conf.d/99no-contents\"" "$LB_LINUX"
+              echo "Patched at line $LINENUM"
+            fi
           fi
-          echo "Patched"
+          echo "Done patching"
 
       - name: Prepare directories
         run: |
