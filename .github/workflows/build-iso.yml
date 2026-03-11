@@ -38,37 +38,30 @@ jobs:
           sudo gpg --batch --no-tty \
             --export F8D2585B8783D481 | \
           sudo tee -a /usr/share/keyrings/debian-archive-keyring.gpg > /dev/null
-          echo "✓ Key imported"
+          echo "Key imported"
 
-      - name: Patch live-build for Debian compatibility
+      - name: Patch live-build for Debian
         run: |
-          # Find and patch all scripts that reference casper
-          echo "=== Scripts referencing casper ==="
-          grep -rln "casper" /usr/lib/live/build/ 2>/dev/null || true
-          # Replace casper with live-boot in all live-build scripts
           for f in $(grep -rln "casper" /usr/lib/live/build/ 2>/dev/null); do
-            echo "Patching $f"
             sudo sed -i 's/casper/live-boot/g' "$f"
           done
-          # Also patch Contents download
           for f in $(grep -rln "Contents" /usr/lib/live/build/ 2>/dev/null); do
             sudo sed -i 's/wget.*Contents[^ ]*/true/g' "$f" || true
           done
-          # Also disable Contents in the bootstrap script
-          BOOTSTRAP="/usr/lib/live/build/bootstrap_debootstrap"
-          if [ -f "$BOOTSTRAP" ]; then
-            sudo sed -i "/lb_chroot_linux-image/a \\ \\ \\ \\ echo 'Acquire::IndexTargets::deb::Contents-deb::DefaultEnabled "false";' > /etc/apt/apt.conf.d/99no-contents" "$BOOTSTRAP" 2>/dev/null || true
+          LB_LINUX="/usr/lib/live/build/chroot_linux-image"
+          if [ -f "$LB_LINUX" ]; then
+            sudo sed -i '2i mkdir -p /etc/apt/apt.conf.d && echo '"'"'Acquire::IndexTargets::deb::Contents-deb::DefaultEnabled "false";'"'"' > /etc/apt/apt.conf.d/99no-contents' "$LB_LINUX"
           fi
-          echo "✓ Patched"
+          echo "Patched"
 
       - name: Prepare directories
         run: |
           mkdir -p build-system/config/includes.chroot/opt/ridos/bin
           mkdir -p build-system/config/includes.chroot/usr/share/ridos
           mkdir -p build-system/config/includes.chroot/etc/ridos
+          mkdir -p build-system/config/includes.chroot/etc/apt/apt.conf.d
           mkdir -p build-system/config/package-lists
           mkdir -p build-system/config/hooks
-          mkdir -p build-system/config/includes.chroot/etc/apt/apt.conf.d
           printf 'Acquire::IndexTargets::deb::Contents-deb::DefaultEnabled "false";\n' \
             > build-system/config/includes.chroot/etc/apt/apt.conf.d/99no-contents
 
@@ -104,24 +97,6 @@ jobs:
             --firmware-chroot true \
             --apt-recommends false
           echo "configured"
-          # Create a chroot_early hook to disable Contents before ANY apt runs
-          sudo mkdir -p build-system/config/hooks/live
-          cat << 'HOOKEOF' | sudo tee build-system/config/hooks/live/0000-no-contents.hook.chroot > /dev/null
-#!/bin/sh
-mkdir -p /etc/apt/apt.conf.d
-echo 'Acquire::IndexTargets::deb::Contents-deb::DefaultEnabled "false";' > /etc/apt/apt.conf.d/99no-contents
-HOOKEOF
-          sudo chmod +x build-system/config/hooks/live/0000-no-contents.hook.chroot
-          # Also write directly into the chroot apt config includes
-          sudo mkdir -p build-system/config/includes.chroot/etc/apt/apt.conf.d
-          printf 'Acquire::IndexTargets::deb::Contents-deb::DefaultEnabled "false";\n' | \
-            sudo tee build-system/config/includes.chroot/etc/apt/apt.conf.d/99no-contents > /dev/null
-          # Patch the live-build linux-image script directly
-          LB_LINUX="/usr/lib/live/build/chroot_linux-image"
-          if [ -f "$LB_LINUX" ]; then
-            sudo sed -i "1a mkdir -p /etc/apt/apt.conf.d 2>/dev/null; echo 'Acquire::IndexTargets::deb::Contents-deb::DefaultEnabled "false";' > /etc/apt/apt.conf.d/99no-contents 2>/dev/null || true" "$LB_LINUX"
-            echo "✓ Patched $LB_LINUX"
-          fi
 
       - name: Build ISO
         run: |
