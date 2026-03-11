@@ -26,6 +26,8 @@ jobs:
             curl wget ca-certificates python3 librsvg2-bin \
             debian-archive-keyring gnupg2
           lb --version
+          echo "=== lb_chroot_linux-image script ==="
+          cat /usr/lib/live/build/lb_chroot_linux-image || echo "NOT FOUND"
 
       - name: Import Debian bookworm signing key
         run: |
@@ -47,8 +49,6 @@ jobs:
           done
           sudo cp build-system/scripts/wget-wrapper.sh /usr/local/bin/wget
           sudo chmod +x /usr/local/bin/wget
-          sudo cp build-system/scripts/inject-apt-conf.sh /usr/local/bin/inject-apt-conf
-          sudo chmod +x /usr/local/bin/inject-apt-conf
           echo "Patches applied"
 
       - name: Prepare build directories
