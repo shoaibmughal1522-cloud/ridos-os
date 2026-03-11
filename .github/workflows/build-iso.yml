@@ -48,22 +48,23 @@ jobs:
           for f in $(grep -rln "Contents" /usr/lib/live/build/ 2>/dev/null); do
             sudo sed -i 's/wget.*Contents[^ ]*/true/g' "$f" || true
           done
-          LB_LINUX="/usr/lib/live/build/chroot_linux-image"
-          if [ -f "$LB_LINUX" ]; then
-            sudo sed -i '2i mkdir -p /etc/apt/apt.conf.d && echo '"'"'Acquire::IndexTargets::deb::Contents-deb::DefaultEnabled "false";'"'"' > /etc/apt/apt.conf.d/99no-contents' "$LB_LINUX"
-          fi
           echo "Patched"
 
-      - name: Prepare directories
+      - name: Prepare directories and hooks
         run: |
           mkdir -p build-system/config/includes.chroot/opt/ridos/bin
           mkdir -p build-system/config/includes.chroot/usr/share/ridos
           mkdir -p build-system/config/includes.chroot/etc/ridos
           mkdir -p build-system/config/includes.chroot/etc/apt/apt.conf.d
           mkdir -p build-system/config/package-lists
-          mkdir -p build-system/config/hooks
+          mkdir -p build-system/config/hooks/normal
+          # Write apt config into chroot includes
           printf 'Acquire::IndexTargets::deb::Contents-deb::DefaultEnabled "false";\n' \
             > build-system/config/includes.chroot/etc/apt/apt.conf.d/99no-contents
+          # Write a hook that runs INSIDE the chroot before package install
+          printf '#!/bin/sh\nmkdir -p /etc/apt/apt.conf.d\nprintf '"'"'Acquire::IndexTargets::deb::Contents-deb::DefaultEnabled "false";\\n'"'"' > /etc/apt/apt.conf.d/99no-contents\napt-get update -qq 2>/dev/null || true\n' \
+            > build-system/config/hooks/normal/0001-no-contents.hook.chroot
+          chmod +x build-system/config/hooks/normal/0001-no-contents.hook.chroot
 
       - name: Inject core files
         run: |
