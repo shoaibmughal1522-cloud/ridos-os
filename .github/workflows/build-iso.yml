@@ -47,10 +47,10 @@ jobs:
           mkdir -p build-system/config/includes.chroot/etc/ridos
           mkdir -p build-system/config/package-lists
           mkdir -p build-system/config/hooks
-          # Disable apt Contents fetching to avoid 404 errors
-          mkdir -p build-system/config/archives
-          echo 'Acquire::IndexTargets::deb::Contents-deb::DefaultEnabled "false";' | \
-            sudo tee build-system/config/archives/no-contents.pref > /dev/null
+          mkdir -p build-system/config/apt
+          # Disable Contents index fetching via apt.conf (correct format)
+          echo 'Acquire::IndexTargets::deb::Contents-deb::DefaultEnabled "false";' \
+            > build-system/config/apt/apt.conf
 
       - name: Inject core files
         run: |
