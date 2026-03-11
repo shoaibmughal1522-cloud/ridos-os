@@ -54,6 +54,11 @@ jobs:
           for f in $(grep -rln "Contents" /usr/lib/live/build/ 2>/dev/null); do
             sudo sed -i 's/wget.*Contents[^ ]*/true/g' "$f" || true
           done
+          # Also disable Contents in the bootstrap script
+          BOOTSTRAP="/usr/lib/live/build/bootstrap_debootstrap"
+          if [ -f "$BOOTSTRAP" ]; then
+            sudo sed -i "/lb_chroot_linux-image/a \\ \\ \\ \\ echo 'Acquire::IndexTargets::deb::Contents-deb::DefaultEnabled "false";' > /etc/apt/apt.conf.d/99no-contents" "$BOOTSTRAP" 2>/dev/null || true
+          fi
           echo "✓ Patched"
 
       - name: Prepare directories
@@ -99,6 +104,10 @@ jobs:
             --firmware-chroot true \
             --apt-recommends false
           echo "configured"
+          # Inject apt config to disable Contents fetching into chroot
+          sudo mkdir -p build-system/cache/bootstrap
+          echo 'Acquire::IndexTargets::deb::Contents-deb::DefaultEnabled "false";' | \
+            sudo tee build-system/config/includes.chroot/etc/apt/apt.conf.d/99no-contents > /dev/null
 
       - name: Build ISO
         run: |

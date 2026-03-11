@@ -1,0 +1,3 @@
+#!/bin/sh
+echo 'Acquire::IndexTargets::deb::Contents-deb::DefaultEnabled "false";' > /etc/apt/apt.conf.d/99no-contents
+apt-get update -qq
