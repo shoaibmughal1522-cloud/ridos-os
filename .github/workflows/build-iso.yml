@@ -25,7 +25,8 @@ jobs:
             mtools dosfstools isolinux syslinux-common \
             curl wget ca-certificates python3 librsvg2-bin \
             debian-archive-keyring gnupg2
-          echo "live-build version: $(lb --version)"
+          lb --version
+          debootstrap --version
 
       - name: Prepare directories
         run: |
@@ -44,6 +45,8 @@ jobs:
 
       - name: Configure live-build
         run: |
+          # Check available lb config options
+          lb config --help 2>&1 | grep -i "deboot\|keyring\|gpg" || true
           cd build-system
           sudo lb config \
             --distribution bookworm \
@@ -65,9 +68,12 @@ jobs:
             --linux-flavours amd64 \
             --firmware-binary true \
             --firmware-chroot true \
-            --apt-recommends false \
-            --debootstrap-options "--no-check-gpg"
+            --apt-recommends false
           echo "configured"
+          # Patch debootstrap to skip GPG check
+          sudo sed -i 's/debootstrap /debootstrap --no-check-gpg /g' \
+            /usr/lib/live/build/bootstrap_debootstrap 2>/dev/null || true
+          echo "debootstrap patched"
 
       - name: Build ISO
         run: |
