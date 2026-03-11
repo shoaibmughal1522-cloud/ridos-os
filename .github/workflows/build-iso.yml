@@ -80,27 +80,19 @@ jobs:
             --firmware-chroot true \
             --apt-recommends false
           echo "configured"
-          # Patch live-build to ignore Contents 404 errors
-          sudo sed -i \
-            's|wget \${WGET_OPTIONS}|wget --no-verbose --ignore-length ${WGET_OPTIONS}|g' \
-            /usr/lib/live/build/chroot_apt 2>/dev/null || true
-          # Set wget to not fail on 404
-          echo "continue_at_error = on" | sudo tee -a /etc/wgetrc > /dev/null
+          # Patch live-build chroot_apt to ignore Contents 404
+          CHROOT_APT="/usr/lib/live/build/chroot_apt"
+          if [ -f "$CHROOT_APT" ]; then
+            sudo sed -i \
+              '/Contents-/s/^/# DISABLED: /' \
+              "$CHROOT_APT" 2>/dev/null || true
+            echo "chroot_apt patched"
+          fi
 
       - name: Build ISO
         run: |
           cd build-system
-          # Run lb build, allow Contents 404 to be non-fatal
-          sudo lb build 2>&1 | tee /tmp/build.log || {
-            # Check if failure was only due to Contents file
-            if grep -q "Contents-amd64" /tmp/build.log && \
-               ! grep -q "Unable to locate package" /tmp/build.log; then
-              echo "⚠ Contents 404 - attempting to continue..."
-              sudo lb build 2>&1 | tee -a /tmp/build.log
-            else
-              exit 1
-            fi
-          }
+          sudo lb build 2>&1 | tee /tmp/build.log
           ls -lh *.iso 2>/dev/null || ls -lh live-image*.iso 2>/dev/null
 
       - name: Package ISO
