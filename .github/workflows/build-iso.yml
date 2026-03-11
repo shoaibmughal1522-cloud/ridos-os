@@ -23,7 +23,8 @@ jobs:
             live-build debootstrap squashfs-tools xorriso \
             grub-pc-bin grub-efi-amd64-bin grub2-common \
             mtools dosfstools isolinux syslinux-common \
-            curl wget ca-certificates python3 librsvg2-bin
+            curl wget ca-certificates python3 librsvg2-bin \
+            debian-archive-keyring
           echo "live-build version: $(lb --version)"
 
       - name: Prepare directories
@@ -52,6 +53,7 @@ jobs:
             --mirror-chroot-security "http://security.debian.org/debian-security/" \
             --mirror-binary "http://deb.debian.org/debian/" \
             --mirror-binary-security "http://security.debian.org/debian-security/" \
+            --keyring-packages "debian-archive-keyring" \
             --archive-areas "main contrib non-free non-free-firmware" \
             --binary-images iso-hybrid \
             --debian-installer false \
