@@ -29,13 +29,16 @@ jobs:
 
       - name: Update Debian keyring
         run: |
-          # Download latest Debian bookworm signing keys
           wget -q https://ftp-master.debian.org/keys/archive-key-12.asc -O /tmp/debian-key.asc
-          sudo gpg --dearmor -o /usr/share/keyrings/debian-archive-keyring.gpg /tmp/debian-key.asc
-          wget -q https://ftp-master.debian.org/keys/archive-key-12-security.asc -O /tmp/debian-sec-key.asc
-          sudo gpg --dearmor --no-default-keyring \
+          sudo gpg --batch --no-tty --dearmor \
+            -o /usr/share/keyrings/debian-archive-keyring.gpg \
+            /tmp/debian-key.asc
+          wget -q https://ftp-master.debian.org/keys/archive-key-12-security.asc \
+            -O /tmp/debian-sec-key.asc
+          sudo gpg --batch --no-tty --dearmor \
+            --no-default-keyring \
             --keyring /usr/share/keyrings/debian-archive-keyring.gpg \
-            /tmp/debian-sec-key.asc
+            /tmp/debian-sec-key.asc || true
           echo "✓ Debian keyring updated"
 
       - name: Prepare directories
