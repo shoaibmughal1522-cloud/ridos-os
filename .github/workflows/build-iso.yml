@@ -27,20 +27,6 @@ jobs:
             debian-archive-keyring gnupg2
           echo "live-build version: $(lb --version)"
 
-      - name: Update Debian keyring
-        run: |
-          wget -q https://ftp-master.debian.org/keys/archive-key-12.asc -O /tmp/debian-key.asc
-          sudo gpg --batch --no-tty --dearmor \
-            -o /usr/share/keyrings/debian-archive-keyring.gpg \
-            /tmp/debian-key.asc
-          wget -q https://ftp-master.debian.org/keys/archive-key-12-security.asc \
-            -O /tmp/debian-sec-key.asc
-          sudo gpg --batch --no-tty --dearmor \
-            --no-default-keyring \
-            --keyring /usr/share/keyrings/debian-archive-keyring.gpg \
-            /tmp/debian-sec-key.asc || true
-          echo "✓ Debian keyring updated"
-
       - name: Prepare directories
         run: |
           mkdir -p build-system/config/includes.chroot/opt/ridos/bin
@@ -79,7 +65,8 @@ jobs:
             --linux-flavours amd64 \
             --firmware-binary true \
             --firmware-chroot true \
-            --apt-recommends false
+            --apt-recommends false \
+            --debootstrap-options "--no-check-gpg"
           echo "configured"
 
       - name: Build ISO
