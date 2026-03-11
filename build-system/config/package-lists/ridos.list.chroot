@@ -1,10 +1,6 @@
-# ═══════════════════════════════════════════════════════════════
 # RIDOS OS v1.1 — Package List
 # Copyright (C) 2026 RIDOS OS Project — GPL v3
-#
-# All packages installed in the RIDOS OS ISO
-# Grouped by category for clarity
-# ═══════════════════════════════════════════════════════════════
+# Debian Bookworm packages only
 
 # ── System Base ────────────────────────────────────────────────
 systemd
@@ -19,70 +15,53 @@ util-linux
 procps
 psmisc
 
-# ── Boot & Display ─────────────────────────────────────────────
+# ── Boot ───────────────────────────────────────────────────────
 grub-pc
-grub-efi-amd64
 os-prober
 plymouth
-plymouth-themes
 
-# ── Hardware Support ───────────────────────────────────────────
+# ── Hardware Firmware ──────────────────────────────────────────
 firmware-linux
 firmware-linux-nonfree
 firmware-misc-nonfree
 firmware-realtek
 firmware-atheros
 firmware-iwlwifi
-firmware-brcm80211
-firmware-ralink
-linux-firmware
 
 # ── Networking Core ────────────────────────────────────────────
 network-manager
-network-manager-gnome
 wpasupplicant
 wireless-tools
 iw
 rfkill
 net-tools
-ifupdown
 iproute2
 iputils-ping
 iputils-tracepath
-resolvconf
 dnsutils
 avahi-daemon
-nfs-common
 
-# ── IT Professional Network Tools ─────────────────────────────
+# ── IT Network Tools ──────────────────────────────────────────
 nmap
 wireshark
 tcpdump
 netcat-openbsd
 traceroute
 whois
-dnsutils
-arp-scan
-netdiscover
 iperf3
 fping
 mtr-tiny
 socat
-ncat
-masscan
 
-# ── Remote Access & Management ────────────────────────────────
+# ── Remote Access ─────────────────────────────────────────────
 openssh-client
 openssh-server
 remmina
-remmina-plugin-rdp
-remmina-plugin-vnc
-tigervnc-viewer
 sshpass
 screen
 tmux
 
-# ── Security Tools ─────────────────────────────────────────────
+# ── Security Tools ────────────────────────────────────────────
 ufw
 iptables
 clamav
@@ -92,7 +71,7 @@ fail2ban
 openssl
 gpg
 
-# ── Development Environment ────────────────────────────────────
+# ── Development ───────────────────────────────────────────────
 python3
 python3-pip
 python3-venv
@@ -105,21 +84,13 @@ git
 curl
 wget
 build-essential
-gdb
-strace
-ltrace
 
-# ── Text Editors ───────────────────────────────────────────────
+# ── Text Editors ──────────────────────────────────────────────
 neovim
 nano
-gedit
 
 # ── Shell & Terminal ──────────────────────────────────────────
-bash
-zsh
-fish
 xterm
-rxvt-unicode
 
 # ── File Management ───────────────────────────────────────────
 zip
@@ -127,36 +98,31 @@ unzip
 tar
 gzip
 bzip2
-p7zip-full
 rsync
-rclone
 
 # ── System Monitoring ─────────────────────────────────────────
 htop
-btop
 iotop
 iftop
 nethogs
 sysstat
 lsof
-strace
 
-# ── Desktop Environment (XFCE Lite) ───────────────────────────
+# ── Desktop (XFCE) ────────────────────────────────────────────
 xfce4
 xfce4-terminal
 xfce4-screenshooter
+xfce4-whiskermenu-plugin
+xfce4-cpugraph-plugin
+xfce4-netload-plugin
 lightdm
 lightdm-gtk-greeter
 xorg
 
-# ── GUI Applications ──────────────────────────────────────────
+# ── GUI Apps ──────────────────────────────────────────────────
 firefox-esr
 thunar
 mousepad
-
-# ── AI & Python Libraries (installed via pip in hook) ─────────
-# httpx, prompt_toolkit, psutil, flask, flask-socketio
-# (installed via build hook, not apt)
 
 # ── Fonts & Locale ────────────────────────────────────────────
 fonts-dejavu
