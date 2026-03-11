@@ -42,36 +42,12 @@ jobs:
 
       - name: Patch live-build for Debian compatibility
         run: |
-          # Replace casper (Ubuntu) with live-boot (Debian)
           for f in $(grep -rln "casper" /usr/lib/live/build/ 2>/dev/null); do
             sudo sed -i 's/casper/live-boot/g' "$f"
-            echo "Patched casper in $f"
           done
-          # Create wget wrapper to silently handle Contents-amd64.gz 404
-          sudo tee /usr/local/bin/wget > /dev/null << 'WGETEOF'
-#!/bin/bash
-REAL_WGET=/usr/bin/wget
-ARGS=("$@")
-# Check if downloading a Contents file
-for arg in "${ARGS[@]}"; do
-  if [[ "$arg" == *"Contents"* ]]; then
-    # Find -O output file
-    for i in "${!ARGS[@]}"; do
-      if [[ "${ARGS[$i]}" == "-O" ]]; then
-        OUTFILE="${ARGS[$((i+1))]}"
-        if [ -n "$OUTFILE" ]; then
-          printf '\x1f\x8b\x08\x00\x00\x00\x00\x00\x00\x03\x03\x00\x00\x00\x00\x00\x00\x00\x00\x00' > "$OUTFILE"
-        fi
-        exit 0
-      fi
-    done
-    exit 0
-  fi
-done
-exec "$REAL_WGET" "$@"
-WGETEOF
+          sudo cp build-system/scripts/wget-wrapper.sh /usr/local/bin/wget
           sudo chmod +x /usr/local/bin/wget
-          echo "wget wrapper installed: $(which wget)"
+          echo "Patches applied"
 
       - name: Prepare build directories
         run: |
@@ -81,10 +57,8 @@ WGETEOF
           mkdir -p build-system/config/includes.chroot/etc/apt/apt.conf.d
           mkdir -p build-system/config/package-lists
           mkdir -p build-system/config/hooks/normal
-          # Disable Contents index inside chroot
           printf 'Acquire::IndexTargets::deb::Contents-deb::DefaultEnabled "false";\n' \
             > build-system/config/includes.chroot/etc/apt/apt.conf.d/99no-contents
-          # Hook that disables Contents from inside chroot
           printf '#!/bin/sh\nmkdir -p /etc/apt/apt.conf.d\nprintf "Acquire::IndexTargets::deb::Contents-deb::DefaultEnabled \\"false\\";\\n" > /etc/apt/apt.conf.d/99no-contents\n' \
             > build-system/config/hooks/normal/0001-no-contents.hook.chroot
           chmod +x build-system/config/hooks/normal/0001-no-contents.hook.chroot
@@ -140,7 +114,7 @@ WGETEOF
           mv "$ISO" "../ridos-os-1.1.0-Baghdad-x86_64.iso"
           cd ..
           md5sum ridos-os-1.1.0-Baghdad-x86_64.iso > ridos-os-1.1.0-Baghdad-x86_64.iso.md5
-          echo "ISO ready: $(du -sh ridos-os-1.1.0-Baghdad-x86_64.iso)"
+          echo "ISO ready"
 
       - name: Upload ISO artifact
         uses: actions/upload-artifact@v4
@@ -167,8 +141,7 @@ WGETEOF
           body: |
             ## RIDOS OS ${{ github.ref_name }} "Baghdad"
             AI-powered Linux distro for IT professionals.
-            Flash with Balena Etcher or dd.
-            GPL v3 — Copyright (C) 2026 RIDOS OS Project
+            GPL v3 - Copyright (C) 2026 RIDOS OS Project
           files: |
             ridos-os-1.1.0-Baghdad-x86_64.iso
             ridos-os-1.1.0-Baghdad-x86_64.iso.md5
