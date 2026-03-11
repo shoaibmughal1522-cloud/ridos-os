@@ -47,10 +47,20 @@ jobs:
           for f in $(grep -rln "casper" /usr/lib/live/build/ 2>/dev/null); do
             sudo sed -i 's/casper/live-boot/g' "$f"
           done
-          echo "=== Scripts containing 'linux-image' ==="
-          grep -rln "linux-image" /usr/lib/live/build/ 2>/dev/null || echo "none"
           echo "=== Scripts containing 'Contents' ==="
           grep -rln "Contents" /usr/lib/live/build/ 2>/dev/null || echo "none"
+          # Patch the correct script: lb_chroot_linux-image (with lb_ prefix)
+          LB_LINUX="/usr/lib/live/build/lb_chroot_linux-image"
+          if [ -f "$LB_LINUX" ]; then
+            echo "=== First 30 lines of lb_chroot_linux-image ==="
+            head -30 "$LB_LINUX"
+            # Insert apt config disable at line 2 of the script
+            sudo sed -i '2i # Disable Contents fetching\nmkdir -p "${CHROOT}/etc/apt/apt.conf.d" 2>/dev/null || true\necho '"'"'Acquire::IndexTargets::deb::Contents-deb::DefaultEnabled "false";'"'"' | sudo chroot "${CHROOT}" tee /etc/apt/apt.conf.d/99no-contents > /dev/null 2>&1 || true' "$LB_LINUX"
+            echo "✓ Patched $LB_LINUX"
+          else
+            echo "ERROR: $LB_LINUX not found!"
+            ls /usr/lib/live/build/ | grep linux
+          fi
           echo "Patched"
 
       - name: Prepare directories
