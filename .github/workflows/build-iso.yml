@@ -104,10 +104,24 @@ jobs:
             --firmware-chroot true \
             --apt-recommends false
           echo "configured"
-          # Inject apt config to disable Contents fetching into chroot
+          # Create a chroot_early hook to disable Contents before ANY apt runs
+          sudo mkdir -p build-system/config/hooks/live
+          cat << 'HOOKEOF' | sudo tee build-system/config/hooks/live/0000-no-contents.hook.chroot > /dev/null
+#!/bin/sh
+mkdir -p /etc/apt/apt.conf.d
+echo 'Acquire::IndexTargets::deb::Contents-deb::DefaultEnabled "false";' > /etc/apt/apt.conf.d/99no-contents
+HOOKEOF
+          sudo chmod +x build-system/config/hooks/live/0000-no-contents.hook.chroot
+          # Also write directly into the chroot apt config includes
           sudo mkdir -p build-system/config/includes.chroot/etc/apt/apt.conf.d
-          echo 'Acquire::IndexTargets::deb::Contents-deb::DefaultEnabled "false";' | \
+          printf 'Acquire::IndexTargets::deb::Contents-deb::DefaultEnabled "false";\n' | \
             sudo tee build-system/config/includes.chroot/etc/apt/apt.conf.d/99no-contents > /dev/null
+          # Patch the live-build linux-image script directly
+          LB_LINUX="/usr/lib/live/build/chroot_linux-image"
+          if [ -f "$LB_LINUX" ]; then
+            sudo sed -i "1a mkdir -p /etc/apt/apt.conf.d 2>/dev/null; echo 'Acquire::IndexTargets::deb::Contents-deb::DefaultEnabled "false";' > /etc/apt/apt.conf.d/99no-contents 2>/dev/null || true" "$LB_LINUX"
+            echo "✓ Patched $LB_LINUX"
+          fi
 
       - name: Build ISO
         run: |
