@@ -119,6 +119,8 @@ jobs:
       - name: Build ISO
         env:
           DEBIAN_FRONTEND: noninteractive
+        continue-on-error: true
+        id: build_iso
         run: |
           cd build-system
           sudo -E lb build 2>&1 | tee /tmp/build.log || true
@@ -134,6 +136,20 @@ jobs:
             # Alternative: use xorriso to write hybrid MBR
             xorriso -drive_class "harmless" -drive_off "on"               -indev "$ISO" -outdev "${ISO%.iso}-bootable.iso"               -boot_image grub grub_version=2               -boot_image grub bin_path="/boot/grub/i386-pc/eltorito.img"               -boot_image any next               -boot_image any efi_path="EFI/boot/bootx64.efi"               -boot_image any platform_id=0xef               -boot_image any next               -commit 2>/dev/null && mv "${ISO%.iso}-bootable.iso" "$ISO" && echo "xorriso hybrid done" || true
           fi
+
+      - name: Check build result
+        run: |
+          cd build-system
+          echo "=== Last 50 lines of build log ==="
+          tail -50 /tmp/build.log
+          echo "=== ISO search ==="
+          find . -name "*.iso" -o -name "*.img" 2>/dev/null | head -10
+          ISO=$(find . -name "*.iso" 2>/dev/null | head -1)
+          if [ -z "$ISO" ]; then
+            echo "FATAL: No ISO produced"
+            exit 1
+          fi
+          echo "ISO found: $ISO"
 
       - name: Package ISO
         run: |
