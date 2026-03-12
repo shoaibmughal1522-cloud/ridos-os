@@ -60,8 +60,15 @@ jobs:
           sudo sed -i 's/ gfxboot-theme-ubuntu//g' /usr/lib/live/build/lb_binary_syslinux
           sudo sed -i 's/syslinux-themes-ubuntu-oneiric //g' /usr/lib/live/build/lb_binary_syslinux
           sudo sed -i 's/gfxboot-theme-ubuntu //g' /usr/lib/live/build/lb_binary_syslinux
-          echo "Remaining ubuntu refs in syslinux script:"
-          grep -n "ubuntu\|oneiric\|gfxboot" /usr/lib/live/build/lb_binary_syslinux | head -10 || echo "NONE - clean!"
+          echo "All syslinux patches done"
+          # The ubuntu) case blocks reference gfxboot-theme-ubuntu
+          # Fix: patch Chroot to ignore missing packages (apt --ignore-missing)
+          sudo sed -i 's/apt-get install/apt-get install --ignore-missing/g' /usr/lib/live/build/lb_binary_syslinux
+          sudo sed -i 's/apt-get ${APT_OPTIONS} install/apt-get ${APT_OPTIONS} install --ignore-missing/g' /usr/lib/live/build/lb_binary_syslinux
+          # Replace the Chroot install command to use --ignore-missing
+          sudo sed -i "s/Chroot chroot "apt-get \${APT_OPTIONS} install/Chroot chroot "apt-get \${APT_OPTIONS} --ignore-missing install/g" /usr/lib/live/build/lb_binary_syslinux
+          # Also patch the helper function
+          grep -n "Chroot\|apt-get" /usr/lib/live/build/lb_binary_syslinux | head -15
           echo "All patches done"
 
       - name: Prepare build directories
@@ -89,6 +96,7 @@ jobs:
           DEBIAN_FRONTEND: noninteractive
         run: |
           cd build-system
+          export LB_DERIVATIVE=debian
           sudo lb config \
             --distribution bookworm \
             --architectures amd64 \
