@@ -60,16 +60,7 @@ jobs:
               echo "Patched defaults: $f"
             done
           echo "All casper patches done"
-          # Remove Ubuntu-only syslinux theme packages from lb_binary_syslinux
-          SYSLINUX_SCRIPT="/usr/lib/live/build/lb_binary_syslinux"
-          if [ -f "$SYSLINUX_SCRIPT" ]; then
-            sudo sed -i 's/syslinux-themes-ubuntu-oneiric//g' "$SYSLINUX_SCRIPT"
-            sudo sed -i 's/gfxboot-theme-ubuntu//g' "$SYSLINUX_SCRIPT"
-            sudo sed -i 's/syslinux-themes-ubuntu//g' "$SYSLINUX_SCRIPT"
-            echo "Patched $SYSLINUX_SCRIPT"
-            grep -n "ubuntu" "$SYSLINUX_SCRIPT" | head -10 || echo "No ubuntu refs remaining"
-          fi
-          echo "Ubuntu syslinux theme patches done"
+          echo "Syslinux disabled - using GRUB only"
           echo "live-config-upstart fix: using --initsystem systemd in lb config"
           sudo cp build-system/scripts/wget-wrapper.sh /usr/local/bin/wget
           sudo chmod +x /usr/local/bin/wget
@@ -120,7 +111,8 @@ jobs:
             --firmware-binary true \
             --firmware-chroot false \
             --apt-recommends false \
-            --initsystem systemd
+            --initsystem systemd \
+            --syslinux false
           echo "live-build configured"
 
       - name: Build ISO
