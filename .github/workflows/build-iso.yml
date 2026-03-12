@@ -37,11 +37,9 @@ jobs:
             --recv-keys F8D2585B8783D481
           sudo gpg --batch --no-tty --export F8D2585B8783D481 | \
             sudo tee -a /usr/share/keyrings/debian-archive-keyring.gpg > /dev/null
-          echo "Key imported"
 
       - name: Patch live-build for Debian compatibility
         run: |
-          # Replace casper with live-boot everywhere
           for f in $(grep -rln "casper" /usr/lib/live/build/ 2>/dev/null); do
             sudo sed -i 's/casper/live-boot/g' "$f"
           done
@@ -49,17 +47,15 @@ jobs:
             xargs grep -ln "casper" 2>/dev/null | while read f; do
               sudo sed -i 's/casper/live-boot/g' "$f"
             done
-          # wget wrapper for Contents-amd64.gz 404
           sudo cp build-system/scripts/wget-wrapper.sh /usr/local/bin/wget
           sudo chmod +x /usr/local/bin/wget
-          # Disable lb_binary_syslinux entirely - inject exit 0 at line 2
-          sudo sed -i '2i exit 0' /usr/lib/live/build/lb_binary_syslinux
-          echo "lb_binary_syslinux disabled"
-          # Also patch lb_binary_iso to skip isohybrid and isolinux
-          sudo sed -i 's/isohybrid/true #isohybrid/g' /usr/lib/live/build/lb_binary_iso 2>/dev/null || true
-          sudo sed -i 's/-b isolinux\/isolinux.bin//g' /usr/lib/live/build/lb_binary_iso 2>/dev/null || true
-          sudo sed -i 's/-c isolinux\/boot.cat//g' /usr/lib/live/build/lb_binary_iso 2>/dev/null || true
-          sudo sed -i 's/-no-emul-boot -boot-load-size 4 -boot-info-table//g' /usr/lib/live/build/lb_binary_iso 2>/dev/null || true
+          # Fix lb_binary_syslinux: remove Ubuntu-only theme packages but KEEP the rest
+          # so the boot sector gets written properly
+          sudo sed -i 's/syslinux-themes-ubuntu-oneiric//g' /usr/lib/live/build/lb_binary_syslinux
+          sudo sed -i 's/gfxboot-theme-ubuntu//g' /usr/lib/live/build/lb_binary_syslinux
+          sudo sed -i '/syslinux-themes-ubuntu/d' /usr/lib/live/build/lb_binary_syslinux
+          # Create a fake syslinux-themes-ubuntu-oneiric to satisfy any remaining deps
+          sudo mkdir -p /usr/share/syslinux/themes/debian-bookworm
           echo "All patches done"
 
       - name: Prepare build directories
@@ -72,12 +68,8 @@ jobs:
           mkdir -p build-system/config/hooks/normal
           printf 'Acquire::IndexTargets::deb::Contents-deb::DefaultEnabled "false";\n' \
             > build-system/config/includes.chroot/etc/apt/apt.conf.d/99no-contents
-          cat > build-system/config/hooks/normal/0001-no-contents.hook.chroot << 'EOF'
-          #!/bin/sh
-          mkdir -p /etc/apt/apt.conf.d
-          printf 'Acquire::IndexTargets::deb::Contents-deb::DefaultEnabled "false";\n' \
-            > /etc/apt/apt.conf.d/99no-contents
-          EOF
+          printf '#!/bin/sh\nmkdir -p /etc/apt/apt.conf.d\nprintf "Acquire::IndexTargets::deb::Contents-deb::DefaultEnabled \\"false\\";\\n" > /etc/apt/apt.conf.d/99no-contents\n' \
+            > build-system/config/hooks/normal/0001-no-contents.hook.chroot
           chmod +x build-system/config/hooks/normal/0001-no-contents.hook.chroot
 
       - name: Inject RIDOS core files
@@ -85,7 +77,6 @@ jobs:
           cp ridos-core/*.py build-system/config/includes.chroot/opt/ridos/bin/
           cp legal/LICENSE.txt legal/COPYRIGHT legal/CONTRIBUTORS.md \
              build-system/config/includes.chroot/usr/share/ridos/
-          echo "Core files injected"
 
       - name: Configure live-build
         env:
@@ -114,7 +105,6 @@ jobs:
             --firmware-binary false \
             --apt-recommends false \
             --initsystem systemd
-          echo "live-build configured"
 
       - name: Build ISO
         env:
@@ -123,44 +113,26 @@ jobs:
         id: build_iso
         run: |
           cd build-system
-          sudo -E lb build 2>&1 | tee /tmp/build.log || true
-          echo "=== Last 30 lines of build log ==="
-          tail -30 /tmp/build.log
-          echo "=== ISO files found ==="
-          find . -name "*.iso" -o -name "*.img" 2>/dev/null
-          # Make ISO bootable using xorriso with GRUB MBR
-          ISO=$(find . -name "*.iso" 2>/dev/null | head -1)
-          if [ -n "$ISO" ]; then
-            # Apply isohybrid MBR so it boots from USB/CD
-            isohybrid "$ISO" 2>/dev/null && echo "isohybrid done" || true
-            # Alternative: use xorriso to write hybrid MBR
-            xorriso -drive_class "harmless" -drive_off "on"               -indev "$ISO" -outdev "${ISO%.iso}-bootable.iso"               -boot_image grub grub_version=2               -boot_image grub bin_path="/boot/grub/i386-pc/eltorito.img"               -boot_image any next               -boot_image any efi_path="EFI/boot/bootx64.efi"               -boot_image any platform_id=0xef               -boot_image any next               -commit 2>/dev/null && mv "${ISO%.iso}-bootable.iso" "$ISO" && echo "xorriso hybrid done" || true
-          fi
+          sudo -E lb build 2>&1 | tee /tmp/build.log
 
-      - name: Check build result
+      - name: Check build result and make bootable
         run: |
           cd build-system
-          echo "=== Last 50 lines of build log ==="
-          tail -50 /tmp/build.log
-          echo "=== ISO search ==="
-          find . -name "*.iso" -o -name "*.img" 2>/dev/null | head -10
+          echo "=== Last 30 lines ==="
+          tail -30 /tmp/build.log
           ISO=$(find . -name "*.iso" 2>/dev/null | head -1)
           if [ -z "$ISO" ]; then
             echo "FATAL: No ISO produced"
             exit 1
           fi
-          echo "ISO found: $ISO"
+          echo "ISO found: $ISO ($(du -sh $ISO | cut -f1))"
+          # Apply isohybrid to make it bootable from USB/CD
+          isohybrid "$ISO" && echo "isohybrid OK" || echo "isohybrid skipped"
 
       - name: Package ISO
         run: |
           cd build-system
           ISO=$(find . -name "*.iso" 2>/dev/null | head -1)
-          if [ -z "$ISO" ]; then
-            echo "ERROR: No ISO found"
-            tail -50 /tmp/build.log
-            exit 1
-          fi
-          echo "Found: $ISO ($(du -sh $ISO | cut -f1))"
           cp "$ISO" "../ridos-os-1.1.0-Baghdad-x86_64.iso"
           cd ..
           md5sum ridos-os-1.1.0-Baghdad-x86_64.iso > ridos-os-1.1.0-Baghdad-x86_64.iso.md5
