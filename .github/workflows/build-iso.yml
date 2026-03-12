@@ -40,35 +40,9 @@ jobs:
 
       - name: Patch live-build for Debian compatibility
         run: |
-          for f in $(grep -rln "casper" /usr/lib/live/build/ 2>/dev/null); do
-            sudo sed -i 's/casper/live-boot/g' "$f"
-          done
-          sudo find /usr/lib/live/ /usr/share/live/ -name "*.sh" -o -name "defaults" 2>/dev/null | \
-            xargs grep -ln "casper" 2>/dev/null | while read f; do
-              sudo sed -i 's/casper/live-boot/g' "$f"
-            done
+          sudo python3 build-system/scripts/patch-livebuild.py
           sudo cp build-system/scripts/wget-wrapper.sh /usr/local/bin/wget
           sudo chmod +x /usr/local/bin/wget
-          # Show exact lines with ubuntu theme in syslinux script
-          grep -n "ubuntu\|oneiric\|gfxboot" /usr/lib/live/build/lb_binary_syslinux | head -20
-          # Remove ALL lines containing ubuntu theme package names
-          sudo sed -i '/syslinux-themes-ubuntu/d' /usr/lib/live/build/lb_binary_syslinux
-          sudo sed -i '/gfxboot-theme-ubuntu/d' /usr/lib/live/build/lb_binary_syslinux
-          sudo sed -i '/oneiric/d' /usr/lib/live/build/lb_binary_syslinux
-          # Also remove them inline from package list variables
-          sudo sed -i 's/ syslinux-themes-ubuntu-oneiric//g' /usr/lib/live/build/lb_binary_syslinux
-          sudo sed -i 's/ gfxboot-theme-ubuntu//g' /usr/lib/live/build/lb_binary_syslinux
-          sudo sed -i 's/syslinux-themes-ubuntu-oneiric //g' /usr/lib/live/build/lb_binary_syslinux
-          sudo sed -i 's/gfxboot-theme-ubuntu //g' /usr/lib/live/build/lb_binary_syslinux
-          echo "All syslinux patches done"
-          # The ubuntu) case blocks reference gfxboot-theme-ubuntu
-          # Fix: patch Chroot to ignore missing packages (apt --ignore-missing)
-          sudo sed -i 's/apt-get install/apt-get install --ignore-missing/g' /usr/lib/live/build/lb_binary_syslinux
-          sudo sed -i 's/apt-get ${APT_OPTIONS} install/apt-get ${APT_OPTIONS} install --ignore-missing/g' /usr/lib/live/build/lb_binary_syslinux
-          # Replace the Chroot install command to use --ignore-missing
-          sudo sed -i "s/Chroot chroot "apt-get \${APT_OPTIONS} install/Chroot chroot "apt-get \${APT_OPTIONS} --ignore-missing install/g" /usr/lib/live/build/lb_binary_syslinux
-          # Also patch the helper function
-          grep -n "Chroot\|apt-get" /usr/lib/live/build/lb_binary_syslinux | head -15
           echo "All patches done"
 
       - name: Prepare build directories
@@ -81,7 +55,7 @@ jobs:
           mkdir -p build-system/config/hooks/normal
           printf 'Acquire::IndexTargets::deb::Contents-deb::DefaultEnabled "false";\n' \
             > build-system/config/includes.chroot/etc/apt/apt.conf.d/99no-contents
-          printf '#!/bin/sh\nmkdir -p /etc/apt/apt.conf.d\nprintf "Acquire::IndexTargets::deb::Contents-deb::DefaultEnabled \\"false\\";\\n" > /etc/apt/apt.conf.d/99no-contents\n' \
+          printf '#!/bin/sh\nmkdir -p /etc/apt/apt.conf.d\necho "Acquire::IndexTargets::deb::Contents-deb::DefaultEnabled false;" > /etc/apt/apt.conf.d/99no-contents\n' \
             > build-system/config/hooks/normal/0001-no-contents.hook.chroot
           chmod +x build-system/config/hooks/normal/0001-no-contents.hook.chroot
 
@@ -96,7 +70,6 @@ jobs:
           DEBIAN_FRONTEND: noninteractive
         run: |
           cd build-system
-          export LB_DERIVATIVE=debian
           sudo lb config \
             --distribution bookworm \
             --architectures amd64 \
@@ -124,33 +97,25 @@ jobs:
         env:
           DEBIAN_FRONTEND: noninteractive
         continue-on-error: true
-        id: build_iso
         run: |
           cd build-system
           sudo -E lb build 2>&1 | tee /tmp/build.log
 
-      - name: Check build result and make bootable
+      - name: Check and package ISO
         run: |
           cd build-system
-          echo "=== Last 30 lines ==="
-          tail -30 /tmp/build.log
+          echo "=== Last 20 lines of build log ==="
+          tail -20 /tmp/build.log
           ISO=$(find . -name "*.iso" 2>/dev/null | head -1)
           if [ -z "$ISO" ]; then
             echo "FATAL: No ISO produced"
             exit 1
           fi
-          echo "ISO found: $ISO ($(du -sh $ISO | cut -f1))"
-          # Apply isohybrid to make it bootable from USB/CD
-          isohybrid "$ISO" && echo "isohybrid OK" || echo "isohybrid skipped"
-
-      - name: Package ISO
-        run: |
-          cd build-system
-          ISO=$(find . -name "*.iso" 2>/dev/null | head -1)
+          echo "ISO: $ISO ($(du -sh $ISO | cut -f1))"
+          isohybrid "$ISO" 2>/dev/null && echo "isohybrid OK" || true
           cp "$ISO" "../ridos-os-1.1.0-Baghdad-x86_64.iso"
           cd ..
           md5sum ridos-os-1.1.0-Baghdad-x86_64.iso > ridos-os-1.1.0-Baghdad-x86_64.iso.md5
-          echo "Done: $(du -sh ridos-os-1.1.0-Baghdad-x86_64.iso)"
 
       - name: Upload ISO artifact
         uses: actions/upload-artifact@v4
