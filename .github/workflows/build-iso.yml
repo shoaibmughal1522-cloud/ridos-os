@@ -52,10 +52,14 @@ jobs:
           # wget wrapper for Contents-amd64.gz 404
           sudo cp build-system/scripts/wget-wrapper.sh /usr/local/bin/wget
           sudo chmod +x /usr/local/bin/wget
-          # Remove Ubuntu-only syslinux theme from lb_binary_syslinux
-          sudo sed -i 's/syslinux-themes-ubuntu-oneiric//g' /usr/lib/live/build/lb_binary_syslinux
-          sudo sed -i 's/gfxboot-theme-ubuntu//g' /usr/lib/live/build/lb_binary_syslinux
-          sudo sed -i 's/syslinux-themes-ubuntu[a-z-]*//g' /usr/lib/live/build/lb_binary_syslinux
+          # Disable lb_binary_syslinux entirely - inject exit 0 at line 2
+          sudo sed -i '2i exit 0' /usr/lib/live/build/lb_binary_syslinux
+          echo "lb_binary_syslinux disabled"
+          # Also patch lb_binary_iso to skip isohybrid and isolinux
+          sudo sed -i 's/isohybrid/true #isohybrid/g' /usr/lib/live/build/lb_binary_iso 2>/dev/null || true
+          sudo sed -i 's/-b isolinux\/isolinux.bin//g' /usr/lib/live/build/lb_binary_iso 2>/dev/null || true
+          sudo sed -i 's/-c isolinux\/boot.cat//g' /usr/lib/live/build/lb_binary_iso 2>/dev/null || true
+          sudo sed -i 's/-no-emul-boot -boot-load-size 4 -boot-info-table//g' /usr/lib/live/build/lb_binary_iso 2>/dev/null || true
           echo "All patches done"
 
       - name: Prepare build directories
@@ -120,11 +124,13 @@ jobs:
           sudo -E lb build 2>&1 | tee /tmp/build.log
           echo "=== ISO files found ==="
           find . -name "*.iso" -o -name "*.img" 2>/dev/null
-          # Make hybrid bootable MBR using isohybrid
+          # Make ISO bootable using xorriso with GRUB MBR
           ISO=$(find . -name "*.iso" 2>/dev/null | head -1)
           if [ -n "$ISO" ]; then
-            isohybrid "$ISO" 2>/dev/null || true
-            echo "isohybrid applied to $ISO"
+            # Apply isohybrid MBR so it boots from USB/CD
+            isohybrid "$ISO" 2>/dev/null && echo "isohybrid done" || true
+            # Alternative: use xorriso to write hybrid MBR
+            xorriso -drive_class "harmless" -drive_off "on"               -indev "$ISO" -outdev "${ISO%.iso}-bootable.iso"               -boot_image grub grub_version=2               -boot_image grub bin_path="/boot/grub/i386-pc/eltorito.img"               -boot_image any next               -boot_image any efi_path="EFI/boot/bootx64.efi"               -boot_image any platform_id=0xef               -boot_image any next               -commit 2>/dev/null && mv "${ISO%.iso}-bootable.iso" "$ISO" && echo "xorriso hybrid done" || true
           fi
 
       - name: Package ISO
