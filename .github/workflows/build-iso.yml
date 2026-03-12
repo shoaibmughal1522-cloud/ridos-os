@@ -60,13 +60,15 @@ jobs:
               echo "Patched defaults: $f"
             done
           echo "All casper patches done"
-          # Remove Ubuntu-only syslinux theme packages not in Debian
-          for pkg in syslinux-themes-ubuntu-oneiric gfxboot-theme-ubuntu syslinux-themes-ubuntu; do
-            sudo find /usr/lib/live/ /usr/share/live/ -type f |               xargs grep -l "$pkg" 2>/dev/null | while read f; do
-                sudo sed -i "s/$pkg//g" "$f"
-                echo "Removed $pkg from $f"
-              done
-          done
+          # Remove Ubuntu-only syslinux theme packages from lb_binary_syslinux
+          SYSLINUX_SCRIPT="/usr/lib/live/build/lb_binary_syslinux"
+          if [ -f "$SYSLINUX_SCRIPT" ]; then
+            sudo sed -i 's/syslinux-themes-ubuntu-oneiric//g' "$SYSLINUX_SCRIPT"
+            sudo sed -i 's/gfxboot-theme-ubuntu//g' "$SYSLINUX_SCRIPT"
+            sudo sed -i 's/syslinux-themes-ubuntu//g' "$SYSLINUX_SCRIPT"
+            echo "Patched $SYSLINUX_SCRIPT"
+            grep -n "ubuntu" "$SYSLINUX_SCRIPT" | head -10 || echo "No ubuntu refs remaining"
+          fi
           echo "Ubuntu syslinux theme patches done"
           echo "live-config-upstart fix: using --initsystem systemd in lb config"
           sudo cp build-system/scripts/wget-wrapper.sh /usr/local/bin/wget
