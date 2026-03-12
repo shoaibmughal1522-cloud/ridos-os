@@ -89,6 +89,7 @@ jobs:
       - name: Configure live-build
         run: |
           cd build-system
+          export DEBIAN_FRONTEND=noninteractive
           sudo lb config \
             --distribution bookworm \
             --architectures amd64 \
@@ -110,13 +111,15 @@ jobs:
             --firmware-binary true \
             --firmware-chroot false \
             --apt-recommends false \
-            --initsystem systemd
+            --initsystem systemd \
+            --apt-options "-o Dpkg::Options::=--force-confnew -o Dpkg::Options::=--force-confdef"
           echo "live-build configured"
 
       - name: Build ISO
         run: |
           cd build-system
-          sudo lb build 2>&1 | tee /tmp/build.log
+          export DEBIAN_FRONTEND=noninteractive
+          sudo DEBIAN_FRONTEND=noninteractive lb build 2>&1 | tee /tmp/build.log
           ls -lh *.iso 2>/dev/null || ls -lh live-image*.iso 2>/dev/null
 
       - name: Package ISO
