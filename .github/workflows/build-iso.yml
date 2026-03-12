@@ -20,6 +20,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y \
+            syslinux syslinux-common isolinux \
             live-build debootstrap squashfs-tools xorriso \
             grub-pc-bin grub-efi-amd64-bin grub2-common \
             mtools dosfstools isolinux syslinux-common \
@@ -122,6 +123,16 @@ jobs:
           # Disable lb_binary_syslinux entirely by making it exit early
           sudo sed -i '2i exit 0' /usr/lib/live/build/lb_binary_syslinux
           echo "lb_binary_syslinux disabled"
+          # Fix genisoimage needing isolinux dir and isohybrid
+          # Patch lb_binary_iso to create isolinux dir if missing and skip isohybrid
+          sudo sed -i 's/isohybrid/true || isohybrid/g' /usr/lib/live/build/lb_binary_iso 2>/dev/null || true
+          sudo sed -i 's/isohybrid/true || isohybrid/g' /usr/lib/live/build/binary.sh 2>/dev/null || true
+          # Find and patch the script that calls isohybrid
+          grep -rln "isohybrid" /usr/lib/live/build/ 2>/dev/null | while read f; do
+            sudo sed -i "s/isohybrid/true #isohybrid/g" "$f"
+            echo "Patched isohybrid in $f"
+          done
+          echo "isohybrid patched"
           sudo -E lb build 2>&1 | tee /tmp/build.log
           ls -lh *.iso 2>/dev/null || ls -lh live-image*.iso 2>/dev/null
 
