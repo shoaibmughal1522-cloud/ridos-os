@@ -53,19 +53,30 @@ jobs:
         run: |
           for f in $(grep -rln "casper" /usr/lib/live/build/ 2>/dev/null); do
             sudo sed -i 's/casper/live-boot/g' "$f"
-            echo "Patched: $f"
+            echo "Patched casper: $f"
           done
-          # Also patch the defaults file where LB_LIVE_PACKAGES might be set
-          sudo find /usr/lib/live/ /usr/share/live/ -name "*.sh" -o -name "defaults" 2>/dev/null |             xargs grep -ln "casper" 2>/dev/null | while read f; do
-              sudo sed -i 's/casper/live-boot/g' "$f"
-              echo "Patched defaults: $f"
-            done
+          sudo find /usr/lib/live/ /usr/share/live/ -name "*.sh" -o -name "defaults" 2>/dev/null | xargs grep -ln "casper" 2>/dev/null | while read f; do
+            sudo sed -i 's/casper/live-boot/g' "$f"
+            echo "Patched defaults: $f"
+          done
           echo "All casper patches done"
           echo "Syslinux disabled - using GRUB only"
           echo "live-config-upstart fix: using --initsystem systemd in lb config"
           sudo cp build-system/scripts/wget-wrapper.sh /usr/local/bin/wget
           sudo chmod +x /usr/local/bin/wget
-          echo "Patches applied"
+          sudo sed -i '2i exit 0' /usr/lib/live/build/lb_binary_syslinux
+          echo "lb_binary_syslinux disabled"
+          LB_ISO="/usr/lib/live/build/lb_binary_iso"
+          if [ -f "$LB_ISO" ]; then
+            sudo sed -i 's/isohybrid/true #isohybrid/g' "$LB_ISO"
+            sudo sed -i 's/-b isolinux\/isolinux.bin//g' "$LB_ISO"
+            sudo sed -i 's/-c isolinux\/boot.cat//g' "$LB_ISO"
+            sudo sed -i 's/-no-emul-boot//g' "$LB_ISO"
+            sudo sed -i 's/-boot-load-size 4//g' "$LB_ISO"
+            sudo sed -i 's/-boot-info-table//g' "$LB_ISO"
+            echo "Patched lb_binary_iso"
+          fi
+          echo "All patches done"
 
       - name: Prepare build directories
         run: |
