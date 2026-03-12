@@ -112,7 +112,10 @@ jobs:
             exit 1
           fi
           echo "ISO: $ISO ($(du -sh $ISO | cut -f1))"
+          # Make ISO bootable with proper GRUB hybrid MBR
           isohybrid "$ISO" 2>/dev/null && echo "isohybrid OK" || true
+          # Use xorriso to add GRUB MBR boot code
+          xorriso -as mkisofs             -r -J --grub2-mbr /usr/lib/grub/i386-pc/boot_hybrid.img             -partition_offset 16             -b boot/grub/i386-pc/eltorito.img             -no-emul-boot -boot-load-size 4 -boot-info-table             --grub2-boot-info             -eltorito-alt-boot             -e EFI/boot/bootx64.efi             -no-emul-boot             --protective-msdos-label             -o "${ISO%.iso}-hybrid.iso"             -graft-points /=binary 2>/dev/null             && mv "${ISO%.iso}-hybrid.iso" "$ISO"             && echo "xorriso hybrid MBR applied"             || echo "xorriso skipped, using original ISO"
           cp "$ISO" "../ridos-os-1.1.0-Baghdad-x86_64.iso"
           cd ..
           md5sum ridos-os-1.1.0-Baghdad-x86_64.iso > ridos-os-1.1.0-Baghdad-x86_64.iso.md5

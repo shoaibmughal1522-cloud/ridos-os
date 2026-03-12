@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Patch live-build scripts for Debian bookworm compatibility."""
-import os, re, glob
+import os, glob
 
 LB_DIR = "/usr/lib/live/build"
 SHARE_DIR = "/usr/share/live"
@@ -33,22 +33,27 @@ patch_file(defaults, [
     ('LB_DERIVATIVE="ubuntu"', 'LB_DERIVATIVE="debian"'),
 ])
 
-# 3. Remove ubuntu-only syslinux theme packages from lb_binary_syslinux
+# 3. Completely replace lb_binary_syslinux with a no-op stub
 syslinux = os.path.join(LB_DIR, "lb_binary_syslinux")
 if os.path.exists(syslinux):
-    with open(syslinux, 'r') as f:
-        lines = f.readlines()
-    new_lines = []
-    for line in lines:
-        if "syslinux-themes-ubuntu-oneiric" in line or "gfxboot-theme-ubuntu" in line:
-            # Replace package install lines with no-ops
-            new_lines.append(line
-                .replace("syslinux-themes-ubuntu-oneiric", "")
-                .replace("gfxboot-theme-ubuntu", ""))
-        else:
-            new_lines.append(line)
     with open(syslinux, 'w') as f:
-        f.writelines(new_lines)
-    print(f"Patched syslinux themes in {syslinux}")
+        f.write("#!/bin/sh\n# Disabled - Ubuntu-only syslinux themes not available in Debian\nexit 0\n")
+    os.chmod(syslinux, 0o755)
+    print(f"Replaced lb_binary_syslinux with no-op stub")
+
+# 4. Fix lb_binary_iso - remove isolinux boot params so genisoimage works without it
+iso_script = os.path.join(LB_DIR, "lb_binary_iso")
+if os.path.exists(iso_script):
+    with open(iso_script, 'r') as f:
+        content = f.read()
+    # Remove isolinux boot options from genisoimage/xorriso command
+    content = content.replace('-b isolinux/isolinux.bin', '')
+    content = content.replace('-c isolinux/boot.cat', '')
+    content = content.replace('-no-emul-boot -boot-load-size 4 -boot-info-table', '')
+    content = content.replace('-no-emul-boot', '')
+    content = content.replace('isohybrid', 'true #isohybrid')
+    with open(iso_script, 'w') as f:
+        f.write(content)
+    print(f"Patched lb_binary_iso to remove isolinux deps")
 
 print("All live-build patches applied successfully")
