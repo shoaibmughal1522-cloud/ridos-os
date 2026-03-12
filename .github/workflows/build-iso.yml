@@ -99,7 +99,6 @@ jobs:
             --keyring-packages "debian-archive-keyring" \
             --archive-areas "main contrib non-free non-free-firmware" \
             --binary-images iso-hybrid \
-            --bootloaders "grub-pc" \
             --debian-installer false \
             --memtest none \
             --iso-volume "RIDOS_OS_1.1" \
@@ -121,6 +120,12 @@ jobs:
           sudo -E lb build 2>&1 | tee /tmp/build.log
           echo "=== ISO files found ==="
           find . -name "*.iso" -o -name "*.img" 2>/dev/null
+          # Make hybrid bootable MBR using isohybrid
+          ISO=$(find . -name "*.iso" 2>/dev/null | head -1)
+          if [ -n "$ISO" ]; then
+            isohybrid "$ISO" 2>/dev/null || true
+            echo "isohybrid applied to $ISO"
+          fi
 
       - name: Package ISO
         run: |
