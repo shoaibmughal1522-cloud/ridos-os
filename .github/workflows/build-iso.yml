@@ -121,7 +121,9 @@ jobs:
           DEBIAN_FRONTEND: noninteractive
         run: |
           cd build-system
-          sudo -E lb build 2>&1 | tee /tmp/build.log
+          sudo -E lb build 2>&1 | tee /tmp/build.log || true
+          echo "=== Last 30 lines of build log ==="
+          tail -30 /tmp/build.log
           echo "=== ISO files found ==="
           find . -name "*.iso" -o -name "*.img" 2>/dev/null
           # Make ISO bootable using xorriso with GRUB MBR
