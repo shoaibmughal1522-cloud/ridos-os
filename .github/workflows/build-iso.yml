@@ -167,6 +167,7 @@ jobs:
           ls -lh ridos-os-1.1.0-Baghdad-x86_64.iso
           file ridos-os-1.1.0-Baghdad-x86_64.iso
           dd if=ridos-os-1.1.0-Baghdad-x86_64.iso bs=512 count=1 2>/dev/null | xxd | head -4
+          isohybrid --uefi ridos-os-1.1.0-Baghdad-x86_64.iso || isohybrid ridos-os-1.1.0-Baghdad-x86_1.iso || true
           md5sum ridos-os-1.1.0-Baghdad-x86_64.iso > ridos-os-1.1.0-Baghdad-x86_64.iso.md5
 
       - name: Upload ISO artifact
