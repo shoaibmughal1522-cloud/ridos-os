@@ -75,13 +75,8 @@ jobs:
 
       - name: Build GRUB images
         run: |
-          grub-mkstandalone --format=i386-pc --output=bios.img --install-modules="linux normal iso9660 biosdisk memdisk search tar ls" --modules="linux normal iso9660 biosdisk search" --locales="" --themes="" "boot/grub/grub.cfg=iso/boot/grub/grub.cfg"
-          grub-mkstandalone --format=x86_64-efi --output=bootx64.efi --install-modules="linux normal iso9660 memdisk search tar ls" --modules="linux normal iso9660 search" --locales="" --themes="" "boot/grub/grub.cfg=iso/boot/grub/grub.cfg"
-          dd if=/dev/zero of=efi.img bs=1M count=4
-          mkfs.vfat efi.img
-          mmd -i efi.img ::/EFI ::/EFI/boot
-          mcopy -i efi.img bootx64.efi ::/EFI/boot/bootx64.efi
-          echo "GRUB done"
+          grub-mkstandalone --format=i386-pc --output=bios.img --install-modules="linux normal iso9660 biosdisk search" --locales="" --themes="" "boot/grub/grub.cfg=iso/boot/grub/grub.cfg"
+          grub-mkstandalone --format=x86_64-efi --output=bootx64.efi --install-modules="linux normal iso9660 search" --locales="" --themes="" "boot/grub/grub.cfg=iso/boot/grub/grub.cfg"
 
       - name: Create bootable ISO
         run: |
