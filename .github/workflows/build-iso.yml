@@ -31,7 +31,8 @@ jobs:
         run: |
           sudo debootstrap \
             --arch=amd64 \
-            --variant=minbase \
+           --variant=minbase \
+           --keyring=/usr/share/keyrings/debian-archive-keyring.gpg \
             --include=systemd,systemd-sysv,udev,live-boot,live-boot-initramfs-tools,\
           linux-image-amd64,initramfs-tools,\
           grub-pc,grub2-common,\
