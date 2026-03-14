@@ -64,7 +64,7 @@ jobs:
           sudo chroot chroot apt-get install -y \
             firmware-linux firmware-linux-free firmware-linux-nonfree \
             firmware-iwlwifi firmware-atheros firmware-realtek \
-            firmware-broadcom-ast firmware-b43-installer \
+            firmware-b43-installer \
             firmware-amd-graphics firmware-misc-nonfree \
             intel-microcode amd64-microcode \
             xserver-xorg xserver-xorg-video-all \
@@ -87,7 +87,7 @@ jobs:
           sudo chroot chroot apt-get install -y \
             xfce4 xfce4-terminal xfce4-whiskermenu-plugin \
             xfce4-power-manager xfce4-notifyd \
-            xfce4-screensaver lightdm lightdm-gtk-greeter \
+            lightdm lightdm-gtk-greeter \
             thunar thunar-archive-plugin \
             ristretto mousepad \
             adwaita-icon-theme papirus-icon-theme \
