@@ -97,13 +97,11 @@ jobs:
           # ── Browsers ──
           sudo chroot chroot apt-get install -y firefox-esr
 
-          # Install Opera
+          # Install Opera via direct .deb
           sudo chroot chroot bash -c "
-            curl -fsSL https://deb.opera.com/archive.key | gpg --dearmor -o /usr/share/keyrings/opera.gpg
-            echo 'deb [signed-by=/usr/share/keyrings/opera.gpg] https://deb.opera.com/opera-stable/ stable non-free' \
-              > /etc/apt/sources.list.d/opera.list
-            apt-get update -qq
-            apt-get install -y opera-stable || true
+            curl -fsSL -o /tmp/opera.deb 'https://download3.operacdn.com/pub/opera/desktop/106.0.4998.70/linux/opera-stable_106.0.4998.70_amd64.deb' || true
+            dpkg -i /tmp/opera.deb 2>/dev/null || apt-get install -f -y || true
+            rm -f /tmp/opera.deb
           "
 
           # ── Development & IT tools ──
