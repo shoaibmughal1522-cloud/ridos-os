@@ -73,9 +73,8 @@ jobs:
           GRUBEOF
           echo "ISO structure ready"
 
-      - name: Build GRUB images
+      - name: Build GRUB and create ISO
         run: |
-          cp iso/boot/grub/grub.cfg .
           grub-mkimage -O i386-pc -o bios.core.img -p "/boot/grub" iso9660 linux normal biosdisk search
           cat /usr/lib/grub/i386-pc/cdboot.img bios.core.img > bios.img
           grub-mkimage -O x86_64-efi -o bootx64.efi -p "/boot/grub" iso9660 linux normal search
@@ -83,8 +82,30 @@ jobs:
           mkfs.vfat efi.img
           mmd -i efi.img ::/EFI ::/EFI/boot
           mcopy -i efi.img bootx64.efi ::/EFI/boot/bootx64.efi
-          echo "GRUB done"
+          xorriso -as mkisofs \
+            -iso-level 3 \
+            -volid "RIDOS_OS" \
+            --grub2-mbr /usr/lib/grub/i386-pc/boot_hybrid.img \
+            --mbr-force-bootable \
+            -eltorito-boot boot/grub/bios.img \
+            -eltorito-catalog boot/grub/boot.cat \
+            -no-emul-boot \
+            -boot-load-size 4 \
+            -boot-info-table \
+            --grub2-boot-info \
+            -o ridos-os-1.1.0-Baghdad-x86_64.iso \
+            -graft-points \
+            "/boot/grub/bios.img=bios.img" \
+            "/=iso"
+          ls -lh ridos-os-1.1.0-Baghdad-x86_64.iso
+          file ridos-os-1.1.0-Baghdad-x86_64.iso
+          md5sum ridos-os-1.1.0-Baghdad-x86_64.iso > ridos-os-1.1.0-Baghdad-x86_64.iso.md5
 
-      - name: Create bootable ISO
-        run: |
-          xorriso -as mkisofs -iso-level 3 -full-iso9660-filenames -volid "RIDOS_OS_1.1" --grub2-mbr /usr/lib/grub/i386-pc/boot_hybrid.img -partition_offset 16 --mbr-force-bootable -append_partition 2 0x
+      - name: Upload ISO
+        uses: actions/upload-artifact@v4
+        with:
+          name: RIDOS-OS-1.1.0-Baghdad
+          path: |
+            ridos-os-1.1.0-Baghdad-x86_64.iso
+            ridos-os-1.1.0-Baghdad-x86_64.iso.md5
+          retention-days: 30
