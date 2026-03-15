@@ -1,42 +1,23 @@
-name: Build RIDOS OS ISO
-
-on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:
-
-jobs:
-  build-iso:
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: write
-    
-    steps:
-      - name: Checkout source
-        uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            debootstrap squashfs-tools xorriso \
-            grub-pc-bin grub-efi-amd64-bin grub2-common \
-            mtools dosfstools rsync python3
-          echo "Dependencies installed."
-
-      - name: Full RIDOS OS Build
+- name: Full RIDOS OS Build
         run: |
           sudo mkdir -p chroot iso/live iso/boot/grub
           
           # 1. Bootstrap Full Debian
           sudo debootstrap --arch=amd64 bookworm chroot http://deb.debian.org/debian/
 
-          # 2. Mount for installation
+          # 2. Add Non-Free and Firmware Repositories (CRITICAL FIX)
+          sudo tee chroot/etc/apt/sources.list << 'EOF'
+          deb http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware
+          deb http://deb.debian.org/debian bookworm-updates main contrib non-free non-free-firmware
+          deb http://security.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware
+          EOF
+
+          # 3. Mount for installation
           sudo mount --bind /dev chroot/dev
           sudo mount --bind /proc chroot/proc
           sudo mount --bind /sys chroot/sys
 
-          # 3. Re-inserting your full RIDOS Baghdad Package List
+          # 4. Install the Full Package List
           sudo chroot chroot apt-get update
           sudo chroot chroot apt-get install -y --no-install-recommends \
             live-boot live-boot-initramfs-tools \
@@ -49,26 +30,26 @@ jobs:
             python3 python3-pip git vim nano curl wget \
             pciutils usbutils neofetch htop
 
-          # 4. Basic Branding / Configuration
+          # 5. Basic Branding / Configuration
           echo "ridos-os" | sudo tee chroot/etc/hostname
           sudo chroot chroot useradd -m -s /bin/bash -G sudo ridos
           echo "ridos:ridos" | sudo chroot chroot chpasswd
           echo "root:ridos" | sudo chroot chroot chpasswd
 
-          # 5. Cleanup and Unmount
+          # 6. Cleanup and Unmount
           sudo umount chroot/sys chroot/proc chroot/dev
           
-          # 6. Build SquashFS (This creates the large 2GB+ data)
+          # 7. Build SquashFS
           sudo mksquashfs chroot filesystem.squashfs -comp xz -e boot
           sudo cp filesystem.squashfs iso/live/
           
-          # 7. Extract Kernel and Initrd for booting
+          # 8. Extract Kernel and Initrd
           KERNEL=$(ls chroot/boot/vmlinuz-* | sort -V | tail -1)
           INITRD=$(ls chroot/boot/initrd.img-* | sort -V | tail -1)
           sudo cp "$KERNEL" iso/live/vmlinuz
           sudo cp "$INITRD" iso/live/initrd
           
-          # 8. Create GRUB Config
+          # 9. Create GRUB Config
           sudo tee iso/boot/grub/grub.cfg << 'EOF'
           set default=0
           set timeout=5
@@ -77,42 +58,3 @@ jobs:
             initrd /live/initrd
           }
           EOF
-
-      - name: Generate Hybrid ISO
-        run: |
-          # Create Boot Images
-          grub-mkimage -O i386-pc -o bios.core.img -p "/boot/grub" iso9660 linux normal biosdisk search
-          cat /usr/lib/grub/i386-pc/cdboot.img bios.core.img > bios.img
-          
-          grub-mkimage -O x86_64-efi -o bootx64.efi -p "/boot/grub" iso9660 linux normal search
-          dd if=/dev/zero of=efi.img bs=1M count=4
-          mkfs.vfat efi.img
-          mmd -i efi.img ::/EFI ::/EFI/boot
-          mcopy -i efi.img bootx64.efi ::/EFI/boot/bootx64.efi
-
-          # Build the Hybrid ISO
-          sudo xorriso -as mkisofs \
-            -iso-level 3 -volid "RIDOS_OS" \
-            --grub2-mbr /usr/lib/grub/i386-pc/boot_hybrid.img \
-            --mbr-force-bootable \
-            -eltorito-boot boot/grub/bios.img \
-            -eltorito-catalog boot/grub/boot.cat \
-            -no-emul-boot -boot-load-size 4 -boot-info-table --grub2-boot-info \
-            -eltorito-alt-boot -e boot/grub/efi.img -no-emul-boot -isohybrid-gpt-basdat \
-            -o ridos-os-baghdad-x86_64.iso \
-            -graft-points \
-            "/boot/grub/bios.img=bios.img" \
-            "/boot/grub/efi.img=efi.img" \
-            "/=iso"
-          
-          md5sum ridos-os-baghdad-x86_64.iso > ridos-os-baghdad-x86_64.iso.md5
-
-      - name: Upload ISO Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: RIDOS-ISO-Baghdad
-          path: |
-            *.iso
-            *.iso.md5
-          if-no-files-found: error
-          retention-days: 7
