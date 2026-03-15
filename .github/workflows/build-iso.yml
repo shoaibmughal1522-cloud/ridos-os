@@ -1,4 +1,30 @@
-- name: Full RIDOS OS Build
+name: Build RIDOS OS ISO
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-iso:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            debootstrap squashfs-tools xorriso \
+            grub-pc-bin grub-efi-amd64-bin grub2-common \
+            mtools dosfstools rsync python3
+          echo "Dependencies installed."
+
+      - name: Full RIDOS OS Build
         run: |
           sudo mkdir -p chroot iso/live iso/boot/grub
           
@@ -58,3 +84,42 @@
             initrd /live/initrd
           }
           EOF
+
+      - name: Generate Hybrid ISO
+        run: |
+          # Create Boot Images
+          grub-mkimage -O i386-pc -o bios.core.img -p "/boot/grub" iso9660 linux normal biosdisk search
+          cat /usr/lib/grub/i386-pc/cdboot.img bios.core.img > bios.img
+          
+          grub-mkimage -O x86_64-efi -o bootx64.efi -p "/boot/grub" iso9660 linux normal search
+          dd if=/dev/zero of=efi.img bs=1M count=4
+          mkfs.vfat efi.img
+          mmd -i efi.img ::/EFI ::/EFI/boot
+          mcopy -i efi.img bootx64.efi ::/EFI/boot/bootx64.efi
+
+          # Build the Hybrid ISO
+          sudo xorriso -as mkisofs \
+            -iso-level 3 -volid "RIDOS_OS" \
+            --grub2-mbr /usr/lib/grub/i386-pc/boot_hybrid.img \
+            --mbr-force-bootable \
+            -eltorito-boot boot/grub/bios.img \
+            -eltorito-catalog boot/grub/boot.cat \
+            -no-emul-boot -boot-load-size 4 -boot-info-table --grub2-boot-info \
+            -eltorito-alt-boot -e boot/grub/efi.img -no-emul-boot -isohybrid-gpt-basdat \
+            -o ridos-os-baghdad-x86_64.iso \
+            -graft-points \
+            "/boot/grub/bios.img=bios.img" \
+            "/boot/grub/efi.img=efi.img" \
+            "/=iso"
+          
+          md5sum ridos-os-baghdad-x86_64.iso > ridos-os-baghdad-x86_64.iso.md5
+
+      - name: Upload ISO Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RIDOS-ISO-Baghdad
+          path: |
+            *.iso
+            *.iso.md5
+          if-no-files-found: error
+          retention-days: 7
