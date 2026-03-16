@@ -175,14 +175,27 @@ jobs:
           printf '[Manager]\nDefaultTimeoutStopSec=5s\nDefaultTimeoutStartSec=10s\nShutdownWatchdogSec=10s\n' \
             | sudo tee chroot/etc/systemd/system.conf.d/timeout.conf > /dev/null
 
-          # Enable services
-          sudo chroot chroot systemctl enable lightdm NetworkManager \
-            bluetooth cups acpid 2>/dev/null || true
+          # Enable only essential services
+          sudo chroot chroot systemctl enable lightdm NetworkManager acpid 2>/dev/null || true
 
-          # Disable exim4 - mail server not needed in live ISO
+          # Disable services that cause boot hangs in live environment
+          sudo chroot chroot systemctl disable NetworkManager-wait-online.service 2>/dev/null || true
+          sudo chroot chroot systemctl disable systemd-networkd-wait-online.service 2>/dev/null || true
+          sudo chroot chroot systemctl disable cups cups-browsed 2>/dev/null || true
+          sudo chroot chroot systemctl disable bluetooth 2>/dev/null || true
           sudo chroot chroot systemctl disable exim4 2>/dev/null || true
+          sudo chroot chroot systemctl disable apt-daily.service apt-daily-upgrade.service 2>/dev/null || true
+          sudo chroot chroot systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true
+          sudo chroot chroot systemctl disable motd-news.timer 2>/dev/null || true
+
+          # Purge exim4 - mail server not needed
           sudo chroot chroot apt-get purge -y exim4 exim4-base exim4-config exim4-daemon-light 2>/dev/null || true
           sudo chroot chroot apt-get autoremove -y --purge 2>/dev/null || true
+
+          # Mask the worst offenders so they can never start
+          sudo chroot chroot systemctl mask NetworkManager-wait-online.service 2>/dev/null || true
+          sudo chroot chroot systemctl mask systemd-networkd-wait-online.service 2>/dev/null || true
+          sudo chroot chroot systemctl mask plymouth-quit-wait.service 2>/dev/null || true
 
           echo "System configured"
 
@@ -626,7 +639,7 @@ jobs:
           set timeout=5
 
           menuentry "RIDOS OS v1.1.0 Baghdad" {
-            linux /live/vmlinuz boot=live quiet splash
+            linux /live/vmlinuz boot=live quiet splash noplymouth systemd.mask=NetworkManager-wait-online.service
             initrd /live/initrd
           }
           menuentry "RIDOS OS (safe mode)" {
@@ -646,7 +659,7 @@ jobs:
           cp /usr/lib/syslinux/modules/bios/libutil.c32   iso/isolinux/
           cp /usr/lib/syslinux/modules/bios/vesamenu.c32  iso/isolinux/
 
-          printf 'UI vesamenu.c32\nTIMEOUT 50\nPROMPT 0\n\nMENU TITLE RIDOS OS v1.1.0 Baghdad\n\nLABEL live\n  MENU LABEL RIDOS OS v1.1.0 Baghdad (Live)\n  KERNEL /live/vmlinuz\n  APPEND initrd=/live/initrd boot=live quiet splash\n\nLABEL safe\n  MENU LABEL RIDOS OS (Safe Graphics Mode)\n  KERNEL /live/vmlinuz\n  APPEND initrd=/live/initrd boot=live nomodeset quiet splash\n\nLABEL debug\n  MENU LABEL RIDOS OS (Debug)\n  KERNEL /live/vmlinuz\n  APPEND initrd=/live/initrd boot=live\n' \
+          printf 'UI vesamenu.c32\nTIMEOUT 50\nPROMPT 0\n\nMENU TITLE RIDOS OS v1.1.0 Baghdad\n\nLABEL live\n  MENU LABEL RIDOS OS v1.1.0 Baghdad (Live)\n  KERNEL /live/vmlinuz\n  APPEND initrd=/live/initrd boot=live quiet splash noplymouth systemd.mask=NetworkManager-wait-online.service\n\nLABEL safe\n  MENU LABEL RIDOS OS (Safe Graphics Mode)\n  KERNEL /live/vmlinuz\n  APPEND initrd=/live/initrd boot=live nomodeset quiet splash\n\nLABEL debug\n  MENU LABEL RIDOS OS (Debug)\n  KERNEL /live/vmlinuz\n  APPEND initrd=/live/initrd boot=live\n' \
             > iso/isolinux/isolinux.cfg
 
           echo "ISO structure ready"
