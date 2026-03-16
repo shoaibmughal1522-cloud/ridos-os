@@ -16,6 +16,7 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
+      # ── Step 1: Install all build-time tools ────────────────────────────────
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -27,23 +28,25 @@ jobs:
             isolinux syslinux syslinux-common
           echo "Done"
 
+      # ── Step 2: Bootstrap Debian + install packages ─────────────────────────
       - name: Bootstrap and Configure RIDOS
         run: |
-          # 1. Bootstrap
+          # 1. Bootstrap minimal Debian bookworm
           sudo debootstrap --arch=amd64 bookworm chroot http://deb.debian.org/debian/
-          
-          # 2. Setup Repos for Firmware
+
+          # 2. Add contrib / non-free / firmware repos
           sudo tee chroot/etc/apt/sources.list << 'EOF'
           deb http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware
           deb http://deb.debian.org/debian bookworm-updates main contrib non-free non-free-firmware
           deb http://security.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware
           EOF
 
-          # 3. Mount and Install Full Package List
-          sudo mount --bind /dev chroot/dev
+          # 3. Mount pseudo-filesystems
+          sudo mount --bind /dev  chroot/dev
           sudo mount --bind /proc chroot/proc
-          sudo mount --bind /sys chroot/sys
-          
+          sudo mount --bind /sys  chroot/sys
+
+          # 4. Install full package set
           sudo chroot chroot apt-get update
           sudo chroot chroot apt-get install -y --no-install-recommends \
             live-boot live-boot-initramfs-tools linux-image-amd64 initramfs-tools \
@@ -52,32 +55,168 @@ jobs:
             firmware-linux firmware-linux-nonfree firmware-misc-nonfree \
             intel-microcode amd64-microcode neofetch htop git vim nano curl wget \
             pciutils usbutils
-          
-          # 4. Branding & User Setup
+
+          # 5. Branding & user setup
           echo "ridos-os" | sudo tee chroot/etc/hostname
           sudo chroot chroot useradd -m -s /bin/bash -G sudo ridos
-          echo "ridos:ridos" | sudo chroot chroot chpasswd
-          echo "root:ridos" | sudo chroot chroot chpasswd
-          
-          # 5. Cleanup
+          echo "ridos:ridos"  | sudo chroot chroot chpasswd
+          echo "root:ridos"   | sudo chroot chroot chpasswd
+
+          # 6. Unmount
           sudo umount chroot/sys chroot/proc chroot/dev
 
+      # ── Step 3: Size reduction pass ─────────────────────────────────────────
+      # Expected savings: ~1.2–1.8 GB uncompressed → ~400–700 MB in final ISO
+      - name: Size Reduction
+        run: |
+          sudo mount --bind /dev  chroot/dev
+          sudo mount --bind /proc chroot/proc
+          sudo mount --bind /sys  chroot/sys
+
+          echo "━━━ Chroot size BEFORE reduction ━━━"
+          sudo du -sh chroot/
+
+          # ── 1. Purge packages never needed in a live desktop ISO (~variable) ─
+          sudo chroot chroot apt-get purge -y --auto-remove \
+            task-* \
+            libreoffice* \
+            gnome-games* aisleriot \
+            thunderbird* evolution* \
+            transmission* rhythmbox* totem* \
+            gcc-12 cpp-12 binutils \
+            linux-headers-* \
+            texlive* \
+            2>/dev/null || true
+          sudo chroot chroot apt-get autoremove -y --purge
+          sudo chroot chroot apt-get clean
+
+          # ── 2. Locale purge — keep English only (~200 MB saved) ──────────────
+          sudo chroot chroot apt-get install -y localepurge
+          sudo bash -c "cat > chroot/etc/locale.nopurge << 'LOCEOF'
+MANDELETE
+DONTBOTHERNEWLOCALE
+SHOWFREEDSPACE
+en
+en_US
+en_US.UTF-8
+LOCEOF"
+          sudo chroot chroot localepurge
+          sudo find chroot/usr/share/locale -mindepth 1 -maxdepth 1 \
+            ! -name 'en' ! -name 'en_US' ! -name 'locale.alias' \
+            -exec rm -rf {} + 2>/dev/null || true
+
+          # ── 3. Strip docs, man pages, info pages (~250 MB saved) ─────────────
+          sudo find chroot/usr/share/doc  -depth -type f ! -name copyright -delete
+          sudo find chroot/usr/share/doc  -empty -type d -delete
+          sudo find chroot/usr/share/man  -type f -delete
+          sudo find chroot/usr/share/man  -empty -type d -delete
+          sudo find chroot/usr/share/info -type f -delete
+          sudo find chroot/usr/share/groff -type f -delete 2>/dev/null || true
+
+          # ── 4. Slim firmware — keep only common desktop hardware (~400 MB saved)
+          # Kept: Intel WiFi (iwlwifi), AMD/Intel GPU (amdgpu/i915), Realtek,
+          #       Broadcom, Atheros, MediaTek, QCA, regulatory DB, Intel blobs
+          sudo chroot chroot bash -c "
+            cd /lib/firmware
+            find . -type f \
+              ! -path './iwlwifi*'    \
+              ! -path './amdgpu*'     \
+              ! -path './i915*'       \
+              ! -path './rtl*'        \
+              ! -path './brcm*'       \
+              ! -path './ath*'        \
+              ! -path './mediatek*'   \
+              ! -path './qca*'        \
+              ! -path './regulatory*' \
+              ! -path './intel*'      \
+              -delete
+            find . -empty -type d -delete
+          "
+
+          # ── 5. Trim unused kernel modules (~200 MB saved) ─────────────────────
+          KVER=$(ls chroot/lib/modules/ | sort -V | tail -1)
+          sudo bash -c "
+            cd chroot/lib/modules/${KVER}/kernel
+            rm -rf drivers/infiniband          # HPC / server fabric
+            rm -rf drivers/staging             # unstable / experimental
+            rm -rf drivers/media/pci           # TV capture PCI cards
+            rm -rf drivers/media/usb/dvb*      # DVB USB tuners
+            rm -rf drivers/net/wan             # legacy WAN cards
+            rm -rf drivers/net/hamradio        # amateur radio
+            rm -rf drivers/net/appletalk       # ancient AppleTalk
+            rm -rf drivers/s390                # IBM mainframe
+            rm -rf drivers/isdn                # ISDN modems
+            rm -rf sound/isa                   # ISA sound cards (pre-PCI era)
+            rm -rf arch/x86/kvm 2>/dev/null || true
+          "
+          sudo chroot chroot depmod -a "${KVER}"
+
+          # ── 6. Strip debug symbols from ELF binaries (~80 MB saved) ──────────
+          sudo chroot chroot bash -c "
+            find /usr/lib /usr/bin /usr/sbin /lib -type f \
+              \( -name '*.so*' -o -perm /0111 \) \
+              ! -name '*.py' ! -name '*.sh' ! -name '*.pl' \
+              -exec strip --strip-unneeded {} + 2>/dev/null || true
+          "
+
+          # ── 7. Remove Python cache files ──────────────────────────────────────
+          sudo find chroot -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+          sudo find chroot -name '*.pyc' -delete 2>/dev/null || true
+          sudo find chroot -name '*.pyo' -delete 2>/dev/null || true
+
+          # ── 8. Wipe apt lists, cache, logs, crash data, temp files ───────────
+          sudo rm -rf chroot/var/lib/apt/lists/*
+          sudo rm -rf chroot/var/cache/apt/*.bin
+          sudo rm -rf chroot/var/cache/apt/archives/*.deb
+          sudo rm -rf chroot/var/cache/*
+          sudo rm -rf chroot/var/log/*
+          sudo rm -rf chroot/tmp/* chroot/var/tmp/*
+          sudo rm -rf chroot/var/crash/*
+          sudo rm -rf chroot/root/.bash_history
+          sudo rm -rf chroot/home/ridos/.bash_history
+          sudo rm -rf chroot/debootstrap 2>/dev/null || true
+
+          # ── 9. Keep only default XFCE icon themes (~50 MB saved) ─────────────
+          sudo find chroot/usr/share/icons -mindepth 1 -maxdepth 1 \
+            ! -name 'hicolor' ! -name 'Adwaita' ! -name 'Tango' \
+            -exec rm -rf {} + 2>/dev/null || true
+
+          # ── 10. Trim bitmap/legacy fonts, keep TrueType/OpenType (~30 MB saved)
+          sudo find chroot/usr/share/fonts -mindepth 1 -maxdepth 1 \
+            ! -name 'truetype' ! -name 'opentype' \
+            -exec rm -rf {} + 2>/dev/null || true
+
+          echo "━━━ Chroot size AFTER reduction ━━━"
+          sudo du -sh chroot/
+
+          sudo umount chroot/sys chroot/proc chroot/dev
+
+      # ── Step 4: Build SquashFS + assemble ISO tree ──────────────────────────
       - name: Build SquashFS
         run: |
-          sudo mksquashfs chroot filesystem.squashfs -comp xz -e boot
+          # -comp xz         → best compression ratio
+          # -Xdict-size 100% → full block as dictionary (slower, smaller output)
+          # -Xbcj x86        → x86 binary filter (~5% extra on executables)
+          # -b 1M            → 1 MB block size (optimal for read-only live FS)
+          sudo mksquashfs chroot filesystem.squashfs \
+            -comp xz -Xdict-size 100% -Xbcj x86 \
+            -b 1M -no-progress \
+            -e boot
+
           mkdir -p iso/live iso/boot/grub iso/isolinux
           cp filesystem.squashfs iso/live/
-          
-          # Extract Kernel and Initrd
+
+          # Copy kernel and initrd
           KERNEL=$(ls chroot/boot/vmlinuz-* | sort -V | tail -1)
           INITRD=$(ls chroot/boot/initrd.img-* | sort -V | tail -1)
           cp "$KERNEL" iso/live/vmlinuz
           cp "$INITRD" iso/live/initrd
 
-          # GRUB Config (UEFI boot)
+          # GRUB config (used for UEFI boot path)
           cat > iso/boot/grub/grub.cfg << 'EOF'
           set default=0
           set timeout=5
+
           menuentry "RIDOS OS v1.1.0 Baghdad" {
             linux /live/vmlinuz boot=live quiet splash
             initrd /live/initrd
@@ -92,14 +231,14 @@ jobs:
           }
           EOF
 
-          # ── isolinux boot files (Legacy BIOS + Rufus detection) ──
+          # isolinux boot files — required for Legacy BIOS + Rufus detection
           cp /usr/lib/ISOLINUX/isolinux.bin               iso/isolinux/
           cp /usr/lib/syslinux/modules/bios/ldlinux.c32   iso/isolinux/
           cp /usr/lib/syslinux/modules/bios/libcom32.c32  iso/isolinux/
           cp /usr/lib/syslinux/modules/bios/libutil.c32   iso/isolinux/
           cp /usr/lib/syslinux/modules/bios/vesamenu.c32  iso/isolinux/
 
-          # isolinux config — mirrors GRUB entries above
+          # isolinux config — mirrors GRUB menu entries above
           cat > iso/isolinux/isolinux.cfg << 'EOF'
           UI vesamenu.c32
           TIMEOUT 50
@@ -123,32 +262,33 @@ jobs:
             APPEND initrd=/live/initrd boot=live toram quiet splash
           EOF
 
+      # ── Step 5: Build final hybrid ISO ──────────────────────────────────────
       - name: Build Hybrid ISO
         run: |
-          # ── BIOS boot image (GRUB i386-pc, preserved from original) ──
+          # BIOS GRUB fallback image
           grub-mkimage -O i386-pc -o bios.core.img -p "/boot/grub" \
             iso9660 linux normal biosdisk search
           cat /usr/lib/grub/i386-pc/cdboot.img bios.core.img > bios.img
 
-          # ── UEFI boot image (preserved from original) ──
+          # UEFI image
           grub-mkimage -O x86_64-efi -o bootx64.efi -p "/boot/grub" \
             iso9660 linux normal search
           dd if=/dev/zero of=efi.img bs=1M count=4
           mkfs.vfat efi.img
-          mmd -i efi.img ::/EFI ::/EFI/boot
+          mmd  -i efi.img ::/EFI ::/EFI/boot
           mcopy -i efi.img bootx64.efi ::/EFI/boot/bootx64.efi
 
-          # ── Build hybrid ISO ──
+          # Build hybrid ISO
           #
-          # Boot priority order:
-          #   1. isolinux  → Legacy BIOS (Rufus "Windows mode" trigger)
-          #   2. bios.img  → GRUB BIOS fallback (--grub2-boot-info)
-          #   3. efi.img   → UEFI
+          # Boot entry order:
+          #   1. isolinux/isolinux.bin  → Legacy BIOS  (Rufus "Windows mode" trigger)
+          #   2. boot/grub/bios.img     → GRUB BIOS fallback
+          #   3. boot/grub/efi.img      → UEFI
           #
-          # Key flags for Rufus compatibility:
-          #   -isohybrid-mbr isohdpfx.bin  → writes MBR hybrid signature Rufus looks for
-          #   --grub2-mbr boot_hybrid.img  → GRUB2 protective MBR (kept from original)
-          #   --mbr-force-bootable         → marks partition bootable in MBR table
+          # Rufus compatibility:
+          #   -isohybrid-mbr isohdpfx.bin   → MBR hybrid signature Rufus checks for
+          #   --grub2-mbr boot_hybrid.img   → GRUB2 protective MBR
+          #   --mbr-force-bootable          → marks partition bootable in MBR table
           #
           sudo xorriso -as mkisofs \
             -iso-level 3 \
@@ -179,6 +319,7 @@ jobs:
 
           md5sum ridos-os-1.1.0-Baghdad-x86_64.iso > ridos-os-1.1.0-Baghdad-x86_64.iso.md5
 
+      # ── Step 6: Upload artifacts ─────────────────────────────────────────────
       - name: Upload ISO
         uses: actions/upload-artifact@v4
         with:
