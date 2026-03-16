@@ -14,7 +14,7 @@ jobs:
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.2.2.2.2
 
       - name: Install dependencies
         run: |
@@ -61,7 +61,7 @@ jobs:
           sudo mount --bind /sys  chroot/sys
 
           echo "--- Chroot size BEFORE reduction ---"
-          sudo du -sh chroot/
+          sudo du -sh --exclude=chroot/proc --exclude=chroot/sys --exclude=chroot/dev chroot/ || true
 
           # 1. Purge packages not needed in a live desktop ISO
           sudo chroot chroot apt-get purge -y --auto-remove \
@@ -156,9 +156,9 @@ jobs:
             -exec rm -rf {} + 2>/dev/null || true
 
           echo "--- Chroot size AFTER reduction ---"
-          sudo du -sh chroot/
+          sudo du -sh --exclude=chroot/proc --exclude=chroot/sys --exclude=chroot/dev chroot/ || true
 
-          sudo umount chroot/sys chroot/proc chroot/dev
+          sudo umount chroot/sys chroot/proc chroot/dev 2>/dev/null || true
 
       - name: Build SquashFS
         run: |
