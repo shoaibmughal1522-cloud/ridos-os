@@ -179,6 +179,11 @@ jobs:
           sudo chroot chroot systemctl enable lightdm NetworkManager \
             bluetooth cups acpid 2>/dev/null || true
 
+          # Disable exim4 - mail server not needed in live ISO
+          sudo chroot chroot systemctl disable exim4 2>/dev/null || true
+          sudo chroot chroot apt-get purge -y exim4 exim4-base exim4-config exim4-daemon-light 2>/dev/null || true
+          sudo chroot chroot apt-get autoremove -y --purge 2>/dev/null || true
+
           echo "System configured"
 
       # ── Step 5: Apply RIDOS branding and theme ───────────────────────────────
