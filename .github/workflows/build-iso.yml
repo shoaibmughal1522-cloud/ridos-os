@@ -32,7 +32,7 @@ jobs:
           # 1. Bootstrap
           sudo debootstrap --arch=amd64 bookworm chroot http://deb.debian.org/debian/
           
-          # 2. Setup Repos for Firmware (The fix for your earlier error)
+          # 2. Setup Repos for Firmware
           sudo tee chroot/etc/apt/sources.list << 'EOF'
           deb http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware
           deb http://deb.debian.org/debian bookworm-updates main contrib non-free non-free-firmware
@@ -74,7 +74,7 @@ jobs:
           cp "$KERNEL" iso/live/vmlinuz
           cp "$INITRD" iso/live/initrd
 
-          # GRUB Config (used for UEFI boot)
+          # GRUB Config (UEFI boot)
           cat > iso/boot/grub/grub.cfg << 'EOF'
           set default=0
           set timeout=5
@@ -82,16 +82,24 @@ jobs:
             linux /live/vmlinuz boot=live quiet splash
             initrd /live/initrd
           }
+          menuentry "RIDOS OS (Safe Graphics)" {
+            linux /live/vmlinuz boot=live nomodeset quiet splash
+            initrd /live/initrd
+          }
+          menuentry "RIDOS OS (Copy to RAM)" {
+            linux /live/vmlinuz boot=live toram quiet splash
+            initrd /live/initrd
+          }
           EOF
 
-          # ── isolinux boot files (BIOS / Rufus compatibility) ──
-          cp /usr/lib/ISOLINUX/isolinux.bin          iso/isolinux/
+          # ── isolinux boot files (Legacy BIOS + Rufus detection) ──
+          cp /usr/lib/ISOLINUX/isolinux.bin               iso/isolinux/
           cp /usr/lib/syslinux/modules/bios/ldlinux.c32   iso/isolinux/
           cp /usr/lib/syslinux/modules/bios/libcom32.c32  iso/isolinux/
           cp /usr/lib/syslinux/modules/bios/libutil.c32   iso/isolinux/
           cp /usr/lib/syslinux/modules/bios/vesamenu.c32  iso/isolinux/
 
-          # isolinux config — mirrors GRUB menu entries
+          # isolinux config — mirrors GRUB entries above
           cat > iso/isolinux/isolinux.cfg << 'EOF'
           UI vesamenu.c32
           TIMEOUT 50
@@ -104,12 +112,12 @@ jobs:
             KERNEL /live/vmlinuz
             APPEND initrd=/live/initrd boot=live quiet splash
 
-          LABEL live-safe
+          LABEL safe
             MENU LABEL RIDOS OS (Safe Graphics Mode)
             KERNEL /live/vmlinuz
             APPEND initrd=/live/initrd boot=live nomodeset quiet splash
 
-          LABEL live-ram
+          LABEL ram
             MENU LABEL RIDOS OS (Copy to RAM)
             KERNEL /live/vmlinuz
             APPEND initrd=/live/initrd boot=live toram quiet splash
@@ -117,26 +125,46 @@ jobs:
 
       - name: Build Hybrid ISO
         run: |
-          # Create UEFI boot image
-          grub-mkimage -O x86_64-efi -o bootx64.efi -p "/boot/grub" iso9660 linux normal search
+          # ── BIOS boot image (GRUB i386-pc, preserved from original) ──
+          grub-mkimage -O i386-pc -o bios.core.img -p "/boot/grub" \
+            iso9660 linux normal biosdisk search
+          cat /usr/lib/grub/i386-pc/cdboot.img bios.core.img > bios.img
+
+          # ── UEFI boot image (preserved from original) ──
+          grub-mkimage -O x86_64-efi -o bootx64.efi -p "/boot/grub" \
+            iso9660 linux normal search
           dd if=/dev/zero of=efi.img bs=1M count=4
           mkfs.vfat efi.img
           mmd -i efi.img ::/EFI ::/EFI/boot
           mcopy -i efi.img bootx64.efi ::/EFI/boot/bootx64.efi
 
           # ── Build hybrid ISO ──
-          # - isolinux handles Legacy BIOS (what Rufus looks for)
-          # - efi.img   handles UEFI
-          # - isohdpfx.bin injects the MBR hybrid signature Rufus requires
+          #
+          # Boot priority order:
+          #   1. isolinux  → Legacy BIOS (Rufus "Windows mode" trigger)
+          #   2. bios.img  → GRUB BIOS fallback (--grub2-boot-info)
+          #   3. efi.img   → UEFI
+          #
+          # Key flags for Rufus compatibility:
+          #   -isohybrid-mbr isohdpfx.bin  → writes MBR hybrid signature Rufus looks for
+          #   --grub2-mbr boot_hybrid.img  → GRUB2 protective MBR (kept from original)
+          #   --mbr-force-bootable         → marks partition bootable in MBR table
+          #
           sudo xorriso -as mkisofs \
             -iso-level 3 \
             -volid "RIDOS_OS" \
             \
             -isohybrid-mbr /usr/lib/ISOLINUX/isohdpfx.bin \
+            --grub2-mbr /usr/lib/grub/i386-pc/boot_hybrid.img \
+            --mbr-force-bootable \
             \
             -eltorito-boot isolinux/isolinux.bin \
             -eltorito-catalog isolinux/boot.cat \
             -no-emul-boot -boot-load-size 4 -boot-info-table \
+            \
+            -eltorito-alt-boot \
+            -e boot/grub/bios.img \
+            -no-emul-boot -boot-info-table --grub2-boot-info \
             \
             -eltorito-alt-boot \
             -e boot/grub/efi.img \
@@ -145,6 +173,7 @@ jobs:
             \
             -o ridos-os-1.1.0-Baghdad-x86_64.iso \
             -graft-points \
+            "/boot/grub/bios.img=bios.img" \
             "/boot/grub/efi.img=efi.img" \
             "/=iso"
 
