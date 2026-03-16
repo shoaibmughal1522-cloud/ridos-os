@@ -93,7 +93,7 @@ jobs:
           sudo chroot chroot apt-get install -y \
             xfce4 xfce4-terminal xfce4-whiskermenu-plugin \
             xfce4-power-manager xfce4-notifyd xscreensaver \
-            xfce4-pulseaudio-plugin network-manager-applet \
+            xfce4-pulseaudio-plugin \
             lightdm lightdm-gtk-greeter \
             thunar thunar-archive-plugin thunar-volman \
             ristretto mousepad \
