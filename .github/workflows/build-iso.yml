@@ -229,16 +229,31 @@ jobs:
           printf 'RIDOS OS v1.1.0 Baghdad - AI-Powered Linux\nUsername: ridos | Password: ridos\n' \
             | sudo tee chroot/etc/issue > /dev/null
 
-          # ── Blacklist nouveau - causes soft lockup on Intel+NVIDIA Optimus ────
+          # ── Fix Intel+NVIDIA Optimus CPU soft lockup ─────────────────────────
           sudo mkdir -p chroot/etc/modprobe.d
-          printf 'blacklist nouveau\nblacklist nvidiafb\nblacklist rivafb\noptions nouveau modeset=0\n' \
-            | sudo tee chroot/etc/modprobe.d/blacklist-nouveau.conf > /dev/null
 
-          # Force Intel GPU as primary (Optimus systems)
-          printf 'options i915 modeset=1\n' \
+          # Blacklist ALL NVIDIA/nouveau drivers completely
+          printf 'blacklist nouveau\nblacklist nvidia\nblacklist nvidiafb\nblacklist rivafb\nblacklist rivatv\nblacklist nv\nblacklist uvcvideo\noptions nouveau modeset=0\noptions nvidia-drm modeset=0\n' \
+            | sudo tee chroot/etc/modprobe.d/blacklist-nvidia.conf > /dev/null
+
+          # Force Intel GPU, disable power management that causes lockup
+          printf 'options i915 modeset=1 enable_psr=0 enable_rc6=0 enable_fbc=0\n' \
             | sudo tee chroot/etc/modprobe.d/intel-gpu.conf > /dev/null
 
-          # Rebuild initramfs so blacklist is included in early boot
+          # Disable watchdog that reports the lockup (masks symptom cleanly)
+          printf 'blacklist iTCO_wdt\nblacklist iTCO_vendor_support\n' \
+            | sudo tee chroot/etc/modprobe.d/disable-watchdog.conf > /dev/null
+
+          # initramfs config - only load what is needed for live boot
+          printf 'MODULES=dep\nBUSYBOX=auto\nCOMPRESS=lz4\n' \
+            | sudo tee chroot/etc/initramfs-tools/initramfs.conf > /dev/null
+
+          # Force blacklists into initramfs
+          sudo mkdir -p chroot/etc/initramfs-tools/conf.d
+          printf 'MODULES=dep\n' \
+            | sudo tee chroot/etc/initramfs-tools/conf.d/driver-policy.conf > /dev/null
+
+          # Rebuild initramfs with blacklists baked in
           sudo mount --bind /dev  chroot/dev
           sudo mount --bind /proc chroot/proc
           sudo mount --bind /sys  chroot/sys
@@ -395,6 +410,19 @@ jobs:
           Categories=System;
           EOF
 
+          # GPU Setup shortcut (shown after HDD install)
+          sudo tee chroot/home/ridos/Desktop/ridos-gpu-setup.desktop << 'EOF'
+          [Desktop Entry]
+          Version=1.0
+          Type=Application
+          Name=Setup GPU Driver
+          Comment=Auto-detect GPU and install the correct driver (run after HDD install)
+          Exec=xfce4-terminal --title="RIDOS GPU Setup" -e "sudo python3 /opt/ridos/bin/ridos_gpu_setup.py"
+          Icon=video-display
+          Terminal=false
+          Categories=System;
+          EOF
+
           sudo chmod +x chroot/home/ridos/Desktop/*.desktop
 
           printf 'TerminalEmulator=xfce4-terminal\n' \
@@ -484,10 +512,19 @@ jobs:
           umount /mnt/ridos-install/proc
           umount /mnt/ridos-install/dev
           umount /mnt/ridos-install
+          # Add GPU setup to autostart on first boot of installed system
+          mkdir -p /mnt/ridos-install/etc/profile.d
+          printf '#!/bin/bash\n# RIDOS first boot GPU setup\nif [ ! -f /etc/ridos-gpu-configured ] && [ "$(id -u)" = "0" ]; then\n  echo ""\n  echo "  RIDOS OS - First Boot: GPU Setup"\n  read -p "  Setup GPU driver now? [Y/n]: " ans\n  if [ "$ans" != "n" ] && [ "$ans" != "N" ]; then\n    python3 /opt/ridos/bin/ridos_gpu_setup.py\n  fi\n  touch /etc/ridos-gpu-configured\nfi\n' \
+            > /mnt/ridos-install/etc/profile.d/ridos-firstboot.sh
+          chmod +x /mnt/ridos-install/etc/profile.d/ridos-firstboot.sh
+
           echo ""
           echo "============================================"
           echo "  RIDOS OS installed successfully!"
           echo "  Remove the USB/DVD and reboot."
+          echo "  On first boot, GPU driver setup will run"
+          echo "  automatically. Or run it manually:"
+          echo "  sudo python3 /opt/ridos/bin/ridos_gpu_setup.py"
           echo "============================================"
           read -p "Press Enter to exit..."
           INSTALLEOF
@@ -508,6 +545,7 @@ jobs:
             AI-Powered Linux for IT Professionals
             Username: ridos  |  Password: ridos
             AI Shell:    python3 /opt/ridos/bin/ridos_shell.py
+            GPU Setup:   sudo python3 /opt/ridos/bin/ridos_gpu_setup.py
             AI Doctor:   python3 /opt/ridos/bin/system_doctor.py
             AI Network:  python3 /opt/ridos/bin/network_analyzer.py
             AI Hardware: python3 /opt/ridos/bin/hardware_fixer.py
@@ -697,7 +735,9 @@ jobs:
           # i915.modeset=1         - force Intel GPU active
           # nvidia-drm.modeset=0   - disable NVIDIA DRM
           # pci=nommconf           - fix PCI config issues on Optimus laptops
-          printf 'set default=0\nset timeout=10\n\nmenuentry "RIDOS OS v1.1.0 Baghdad" {\n  linux /live/vmlinuz boot=live components ip=none noplymouth nosplash nouveau.modeset=0 nvidia-drm.modeset=0 i915.modeset=1 pci=nommconf loglevel=3\n  initrd /live/initrd\n}\nmenuentry "RIDOS OS (nomodeset fallback)" {\n  linux /live/vmlinuz boot=live components ip=none nomodeset noplymouth nosplash nouveau.modeset=0 loglevel=3\n  initrd /live/initrd\n}\nmenuentry "RIDOS OS (Safe - ACPI off)" {\n  linux /live/vmlinuz boot=live components ip=none nomodeset noplymouth nosplash acpi=off noapic nouveau.modeset=0 loglevel=3\n  initrd /live/initrd\n}\nmenuentry "RIDOS OS (Debug - verbose)" {\n  linux /live/vmlinuz boot=live components ip=none nouveau.modeset=0\n  initrd /live/initrd\n}\n' \
+          # Live boot always uses nomodeset + VESA/fbdev - works on ALL hardware
+          # GPU drivers are installed AFTER HDD install by ridos-gpu-setup.sh
+          printf 'set default=0\nset timeout=10\n\nmenuentry "RIDOS OS v1.1.0 Baghdad (Live)" {\n  linux /live/vmlinuz boot=live components ip=none nomodeset vga=normal noplymouth nosplash nouveau.modeset=0 nvidia-drm.modeset=0 i915.modeset=0 radeon.modeset=0 amdgpu.modeset=0 loglevel=3\n  initrd /live/initrd\n}\nmenuentry "RIDOS OS (Safe - ACPI off)" {\n  linux /live/vmlinuz boot=live components ip=none nomodeset vga=normal noplymouth nosplash acpi=off noapic nouveau.modeset=0 loglevel=3\n  initrd /live/initrd\n}\nmenuentry "RIDOS OS (Debug - verbose)" {\n  linux /live/vmlinuz boot=live components ip=none nomodeset\n  initrd /live/initrd\n}\n' \
             > iso/boot/grub/grub.cfg
 
           # isolinux files (Legacy BIOS + Rufus detection)
@@ -707,7 +747,7 @@ jobs:
           cp /usr/lib/syslinux/modules/bios/libutil.c32   iso/isolinux/
           cp /usr/lib/syslinux/modules/bios/vesamenu.c32  iso/isolinux/
 
-          printf 'UI vesamenu.c32\nTIMEOUT 50\nPROMPT 0\n\nMENU TITLE RIDOS OS v1.1.0 Baghdad\n\nLABEL live\n  MENU LABEL RIDOS OS v1.1.0 Baghdad (Live)\n  KERNEL /live/vmlinuz\n  APPEND initrd=/live/initrd boot=live components ip=none noplymouth nosplash nouveau.modeset=0 nvidia-drm.modeset=0 i915.modeset=1 pci=nommconf loglevel=3\n\nLABEL nomodeset\n  MENU LABEL RIDOS OS (nomodeset fallback)\n  KERNEL /live/vmlinuz\n  APPEND initrd=/live/initrd boot=live components ip=none nomodeset noplymouth nosplash nouveau.modeset=0 loglevel=3\n\nLABEL safe\n  MENU LABEL RIDOS OS (Safe - ACPI off)\n  KERNEL /live/vmlinuz\n  APPEND initrd=/live/initrd boot=live components ip=none nomodeset noplymouth nosplash acpi=off noapic nouveau.modeset=0 loglevel=3\n\nLABEL debug\n  MENU LABEL RIDOS OS (Debug)\n  KERNEL /live/vmlinuz\n  APPEND initrd=/live/initrd boot=live components ip=none nouveau.modeset=0\n' \
+          printf 'UI vesamenu.c32\nTIMEOUT 50\nPROMPT 0\n\nMENU TITLE RIDOS OS v1.1.0 Baghdad\n\nLABEL live\n  MENU LABEL RIDOS OS v1.1.0 Baghdad (Live)\n  KERNEL /live/vmlinuz\n  APPEND initrd=/live/initrd boot=live components ip=none nomodeset vga=normal noplymouth nosplash nouveau.modeset=0 nvidia-drm.modeset=0 i915.modeset=0 radeon.modeset=0 amdgpu.modeset=0 loglevel=3\n\nLABEL safe\n  MENU LABEL RIDOS OS (Safe - ACPI off)\n  KERNEL /live/vmlinuz\n  APPEND initrd=/live/initrd boot=live components ip=none nomodeset vga=normal noplymouth nosplash acpi=off noapic nouveau.modeset=0 loglevel=3\n\nLABEL debug\n  MENU LABEL RIDOS OS (Debug)\n  KERNEL /live/vmlinuz\n  APPEND initrd=/live/initrd boot=live components ip=none nomodeset\n' \
             > iso/isolinux/isolinux.cfg
 
           echo "ISO structure ready"
