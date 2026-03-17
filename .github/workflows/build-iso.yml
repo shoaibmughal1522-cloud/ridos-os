@@ -207,6 +207,17 @@ jobs:
           printf '[Desktop Entry]\nName=Xfce Session\nComment=Use this session to run Xfce\nExec=startxfce4\nIcon=\nType=Application\n' \
             | sudo tee chroot/usr/share/xsessions/xfce.desktop > /dev/null
 
+          # ── Force X11 fbdev driver - works with nomodeset on any GPU ─────────
+          # Without this X tries KMS drivers first and crashes with nomodeset
+          sudo mkdir -p chroot/etc/X11/xorg.conf.d
+          printf 'Section \"Device\"\n  Identifier \"Default\"\n  Driver \"fbdev\"\nEndSection\n\nSection \"Screen\"\n  Identifier \"Default Screen\"\n  Device \"Default\"\nEndSection\n' \\
+            | sudo tee chroot/etc/X11/xorg.conf.d/20-fbdev.conf > /dev/null
+
+          # ── Stop LightDM crash-restart loop ───────────────────────────────────
+          sudo mkdir -p chroot/etc/systemd/system/lightdm.service.d
+          printf '[Service]\nRestart=no\nStartLimitBurst=2\nStartLimitIntervalSec=60\n' \\
+            | sudo tee chroot/etc/systemd/system/lightdm.service.d/no-restart.conf > /dev/null
+
           # ── NetworkManager offline mode ───────────────────────────────────────
           sudo mkdir -p chroot/etc/NetworkManager/conf.d
           printf '[main]\nplugins=ifupdown,keyfile\n\n[ifupdown]\nmanaged=false\n' \
@@ -444,6 +455,9 @@ jobs:
         run: |
           sudo mkdir -p chroot/opt/ridos/bin
           sudo mkdir -p chroot/usr/share/ridos
+          # Copies: ai_engine.py (offline fallback), ridos_shell.py,
+          # system_doctor.py, network_analyzer.py, hardware_fixer.py,
+          # security_scanner.py, ridos_installer_gui.py, ridos_gpu_setup.py
           sudo cp ridos-core/*.py chroot/opt/ridos/bin/
           sudo chmod +x chroot/opt/ridos/bin/*.py
           sudo cp legal/LICENSE.txt legal/COPYRIGHT legal/CONTRIBUTORS.md \
