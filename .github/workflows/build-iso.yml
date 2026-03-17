@@ -203,7 +203,7 @@ jobs:
           echo 'en_US.UTF-8 UTF-8' | sudo tee    chroot/etc/locale.gen > /dev/null
           echo 'ar_IQ.UTF-8 UTF-8' | sudo tee -a chroot/etc/locale.gen > /dev/null
           sudo chroot chroot locale-gen
-          echo "LANG=en_US.UTF-8"  | sudo tee chroot/etc/default/locale
+          echo "LANG=en_US.UTF-8" | sudo tee chroot/etc/default/locale
           sudo chroot chroot ln -sf /usr/share/zoneinfo/Asia/Baghdad /etc/localtime
 
           # ── User setup ───────────────────────────────────────────────────────
@@ -219,7 +219,6 @@ jobs:
           sudo chroot chroot apt-get autoremove -y --purge 2>/dev/null || true
 
           # ── Mask services that cause boot hangs ──────────────────────────────
-          # Only mask what truly causes hangs - keep ModemManager for 3G/4G
           for SVC in \
             NetworkManager-wait-online.service \
             systemd-networkd-wait-online.service \
@@ -227,80 +226,73 @@ jobs:
             apt-daily.service apt-daily-upgrade.service \
             apt-daily.timer apt-daily-upgrade.timer \
             motd-news.timer motd-news.service \
-            exim4.service \
-            e2scrub_reap.service \
+            exim4.service e2scrub_reap.service \
             fstrim.timer man-db.timer dpkg-db-backup.timer; do
             sudo chroot chroot systemctl mask "$SVC" 2>/dev/null || true
           done
 
-          # ── Enable essential services ─────────────────────────────────────────
-          sudo chroot chroot systemctl enable lightdm NetworkManager acpid 2>/dev/null || true
+          # ── DISPLAY APPROACH: getty autologin + startxfce4 ───────────────────
+          # LightDM + X is unreliable on diverse hardware in live mode.
+          # Solution: autologin on tty1 -> .bash_profile -> startxfce4
+          # Used by: Arch Linux, Alpine Linux, many minimal live distros.
+          # This bypasses the entire LightDM/display-manager chain entirely.
 
-          # ── LightDM complete config (single clean file) ───────────────────────
-          sudo mkdir -p chroot/etc/lightdm chroot/etc/lightdm/lightdm.conf.d
-          echo '[LightDM]'                            | sudo tee    chroot/etc/lightdm/lightdm.conf > /dev/null
-          echo 'logind-check-graphical=false'         | sudo tee -a chroot/etc/lightdm/lightdm.conf > /dev/null
-          echo '[Seat:*]'                              | sudo tee -a chroot/etc/lightdm/lightdm.conf > /dev/null
-          echo 'autologin-user=ridos'                 | sudo tee -a chroot/etc/lightdm/lightdm.conf > /dev/null
-          echo 'autologin-user-timeout=0'             | sudo tee -a chroot/etc/lightdm/lightdm.conf > /dev/null
-          echo 'user-session=xfce'                    | sudo tee -a chroot/etc/lightdm/lightdm.conf > /dev/null
-          echo 'greeter-session=lightdm-gtk-greeter'  | sudo tee -a chroot/etc/lightdm/lightdm.conf > /dev/null
-          echo 'xserver-allow-tcp=false'              | sudo tee -a chroot/etc/lightdm/lightdm.conf > /dev/null
+          # Disable LightDM - use getty instead
+          sudo chroot chroot systemctl disable lightdm 2>/dev/null || true
+          sudo chroot chroot systemctl mask    lightdm 2>/dev/null || true
 
-          # ── LightDM greeter branding ──────────────────────────────────────────
-          echo '[greeter]'                             | sudo tee    chroot/etc/lightdm/lightdm-gtk-greeter.conf > /dev/null
-          echo 'background=#1a0a2e'                   | sudo tee -a chroot/etc/lightdm/lightdm-gtk-greeter.conf > /dev/null
-          echo 'theme-name=Adwaita-dark'              | sudo tee -a chroot/etc/lightdm/lightdm-gtk-greeter.conf > /dev/null
-          echo 'icon-theme-name=Papirus-Dark'         | sudo tee -a chroot/etc/lightdm/lightdm-gtk-greeter.conf > /dev/null
-          echo 'font-name=Noto Sans 11'               | sudo tee -a chroot/etc/lightdm/lightdm-gtk-greeter.conf > /dev/null
+          # Enable what we need
+          sudo chroot chroot systemctl enable NetworkManager acpid 2>/dev/null || true
 
-          # ── XFCE session file ─────────────────────────────────────────────────
-          sudo mkdir -p chroot/usr/share/xsessions
-          echo '[Desktop Entry]'                   | sudo tee    chroot/usr/share/xsessions/xfce.desktop > /dev/null
-          echo 'Name=Xfce Session'                 | sudo tee -a chroot/usr/share/xsessions/xfce.desktop > /dev/null
-          echo 'Exec=startxfce4'                   | sudo tee -a chroot/usr/share/xsessions/xfce.desktop > /dev/null
-          echo 'Type=Application'                  | sudo tee -a chroot/usr/share/xsessions/xfce.desktop > /dev/null
+          # Getty autologin on tty1
+          sudo mkdir -p chroot/etc/systemd/system/getty@tty1.service.d
+          echo '[Service]' \
+            | sudo tee chroot/etc/systemd/system/getty@tty1.service.d/autologin.conf > /dev/null
+          echo 'ExecStart=' \
+            | sudo tee -a chroot/etc/systemd/system/getty@tty1.service.d/autologin.conf > /dev/null
+          echo 'ExecStart=-/sbin/agetty --autologin ridos --noclear %I $TERM' \
+            | sudo tee -a chroot/etc/systemd/system/getty@tty1.service.d/autologin.conf > /dev/null
 
-          # ── X11 config: vesa for live boot (works on ALL hardware) ────────────
-          # vesa driver = no KMS = no GPU driver needed = no lockup
+          # .bash_profile: auto-start XFCE on tty1
+          echo '# RIDOS auto-start XFCE'                                  | sudo tee    chroot/home/ridos/.bash_profile > /dev/null
+          echo 'if [ -z "$DISPLAY" ] && [ "$(tty)" = "/dev/tty1" ]; then' | sudo tee -a chroot/home/ridos/.bash_profile > /dev/null
+          echo '  export XDG_SESSION_TYPE=x11'                            | sudo tee -a chroot/home/ridos/.bash_profile > /dev/null
+          echo '  export XDG_RUNTIME_DIR=/run/user/$(id -u)'              | sudo tee -a chroot/home/ridos/.bash_profile > /dev/null
+          echo '  mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"' | sudo tee -a chroot/home/ridos/.bash_profile > /dev/null
+          echo '  exec startxfce4'                                        | sudo tee -a chroot/home/ridos/.bash_profile > /dev/null
+          echo 'fi'                                                        | sudo tee -a chroot/home/ridos/.bash_profile > /dev/null
+
+          # .xinitrc: XFCE session
+          echo '#!/bin/sh'       | sudo tee    chroot/home/ridos/.xinitrc > /dev/null
+          echo 'exec startxfce4' | sudo tee -a chroot/home/ridos/.xinitrc > /dev/null
+          sudo chmod +x chroot/home/ridos/.xinitrc
+
+          # ── X11 config: vesa universal driver ────────────────────────────────
           sudo mkdir -p chroot/etc/X11/xorg.conf.d
-          echo 'Section "Device"'           | sudo tee    chroot/etc/X11/xorg.conf.d/20-display.conf > /dev/null
-          echo '  Identifier "Card0"'       | sudo tee -a chroot/etc/X11/xorg.conf.d/20-display.conf > /dev/null
-          echo '  Driver "vesa"'            | sudo tee -a chroot/etc/X11/xorg.conf.d/20-display.conf > /dev/null
-          echo 'EndSection'                 | sudo tee -a chroot/etc/X11/xorg.conf.d/20-display.conf > /dev/null
-          echo 'Section "Screen"'           | sudo tee -a chroot/etc/X11/xorg.conf.d/20-display.conf > /dev/null
-          echo '  Identifier "Screen0"'     | sudo tee -a chroot/etc/X11/xorg.conf.d/20-display.conf > /dev/null
-          echo '  Device "Card0"'           | sudo tee -a chroot/etc/X11/xorg.conf.d/20-display.conf > /dev/null
-          echo '  DefaultDepth 16'          | sudo tee -a chroot/etc/X11/xorg.conf.d/20-display.conf > /dev/null
-          echo 'EndSection'                 | sudo tee -a chroot/etc/X11/xorg.conf.d/20-display.conf > /dev/null
+          echo 'Section "Device"'       | sudo tee    chroot/etc/X11/xorg.conf.d/20-display.conf > /dev/null
+          echo '  Identifier "Card0"'   | sudo tee -a chroot/etc/X11/xorg.conf.d/20-display.conf > /dev/null
+          echo '  Driver "vesa"'        | sudo tee -a chroot/etc/X11/xorg.conf.d/20-display.conf > /dev/null
+          echo 'EndSection'             | sudo tee -a chroot/etc/X11/xorg.conf.d/20-display.conf > /dev/null
+          echo 'Section "Screen"'       | sudo tee -a chroot/etc/X11/xorg.conf.d/20-display.conf > /dev/null
+          echo '  Identifier "Screen0"' | sudo tee -a chroot/etc/X11/xorg.conf.d/20-display.conf > /dev/null
+          echo '  Device "Card0"'       | sudo tee -a chroot/etc/X11/xorg.conf.d/20-display.conf > /dev/null
+          echo '  DefaultDepth 16'      | sudo tee -a chroot/etc/X11/xorg.conf.d/20-display.conf > /dev/null
+          echo 'EndSection'             | sudo tee -a chroot/etc/X11/xorg.conf.d/20-display.conf > /dev/null
 
-          # ── LightDM service: no restart loop ─────────────────────────────────
-          sudo mkdir -p chroot/etc/systemd/system/lightdm.service.d
-          echo '[Service]'              | sudo tee    chroot/etc/systemd/system/lightdm.service.d/ridos.conf > /dev/null
-          echo 'Restart=on-failure'     | sudo tee -a chroot/etc/systemd/system/lightdm.service.d/ridos.conf > /dev/null
-          echo 'RestartSec=3s'          | sudo tee -a chroot/etc/systemd/system/lightdm.service.d/ridos.conf > /dev/null
-          echo 'StartLimitBurst=3'      | sudo tee -a chroot/etc/systemd/system/lightdm.service.d/ridos.conf > /dev/null
-          echo 'StartLimitIntervalSec=30' | sudo tee -a chroot/etc/systemd/system/lightdm.service.d/ridos.conf > /dev/null
-
-          # ── GPU: blacklist nouveau only (not all NVIDIA) ──────────────────────
-          # blacklist nouveau = prevents Optimus lockup
-          # do NOT blacklist i915 - Intel needs it for VESA fallback
+          # ── Blacklist nouveau (prevents Optimus CPU lockup) ───────────────────
           sudo mkdir -p chroot/etc/modprobe.d
-          echo 'blacklist nouveau'      | sudo tee    chroot/etc/modprobe.d/blacklist-nouveau.conf > /dev/null
-          echo 'blacklist nvidiafb'     | sudo tee -a chroot/etc/modprobe.d/blacklist-nouveau.conf > /dev/null
-          echo 'options nouveau modeset=0' | sudo tee -a chroot/etc/modprobe.d/blacklist-nouveau.conf > /dev/null
+          echo 'blacklist nouveau'          | sudo tee    chroot/etc/modprobe.d/blacklist-nouveau.conf > /dev/null
+          echo 'blacklist nvidiafb'         | sudo tee -a chroot/etc/modprobe.d/blacklist-nouveau.conf > /dev/null
+          echo 'options nouveau modeset=0'  | sudo tee -a chroot/etc/modprobe.d/blacklist-nouveau.conf > /dev/null
+          echo 'blacklist iTCO_wdt'         | sudo tee    chroot/etc/modprobe.d/watchdog.conf > /dev/null
+          echo 'blacklist iTCO_vendor_support' | sudo tee -a chroot/etc/modprobe.d/watchdog.conf > /dev/null
 
-          # ── Disable watchdog (prevents false lockup reports) ──────────────────
-          echo 'blacklist iTCO_wdt'         | sudo tee    chroot/etc/modprobe.d/disable-watchdog.conf > /dev/null
-          echo 'blacklist iTCO_vendor_support' | sudo tee -a chroot/etc/modprobe.d/disable-watchdog.conf > /dev/null
+          # ── initramfs: MODULES=most for max live hardware support ─────────────
+          echo 'MODULES=most' | sudo tee    chroot/etc/initramfs-tools/conf.d/live.conf > /dev/null
+          echo 'BUSYBOX=auto' | sudo tee -a chroot/etc/initramfs-tools/conf.d/live.conf > /dev/null
+          echo 'COMPRESS=lz4' | sudo tee -a chroot/etc/initramfs-tools/conf.d/live.conf > /dev/null
 
-          # ── initramfs: keep MODULES=most for live boot compatibility ──────────
-          # MODULES=most ensures all drivers available on any hardware
-          echo 'MODULES=most'   | sudo tee    chroot/etc/initramfs-tools/conf.d/live.conf > /dev/null
-          echo 'BUSYBOX=auto'   | sudo tee -a chroot/etc/initramfs-tools/conf.d/live.conf > /dev/null
-          echo 'COMPRESS=lz4'   | sudo tee -a chroot/etc/initramfs-tools/conf.d/live.conf > /dev/null
-
-          # ── Rebuild initramfs with all fixes baked in ─────────────────────────
+          # Rebuild initramfs with all fixes baked in
           sudo mount --bind /dev  chroot/dev
           sudo mount --bind /proc chroot/proc
           sudo mount --bind /sys  chroot/sys
@@ -320,12 +312,12 @@ jobs:
           echo 'LIVE_HOSTNAME=ridos-os' | sudo tee    chroot/etc/live/config.conf > /dev/null
           echo 'LIVE_USERNAME=ridos'    | sudo tee -a chroot/etc/live/config.conf > /dev/null
 
-          # ── Systemd timeouts ──────────────────────────────────────────────────
+          # ── Systemd fast timeouts ─────────────────────────────────────────────
           sudo mkdir -p chroot/etc/systemd/system.conf.d
-          echo '[Manager]'                    | sudo tee    chroot/etc/systemd/system.conf.d/timeout.conf > /dev/null
-          echo 'DefaultTimeoutStartSec=10s'   | sudo tee -a chroot/etc/systemd/system.conf.d/timeout.conf > /dev/null
-          echo 'DefaultTimeoutStopSec=5s'     | sudo tee -a chroot/etc/systemd/system.conf.d/timeout.conf > /dev/null
-          echo 'ShutdownWatchdogSec=10s'      | sudo tee -a chroot/etc/systemd/system.conf.d/timeout.conf > /dev/null
+          echo '[Manager]'                   | sudo tee    chroot/etc/systemd/system.conf.d/timeout.conf > /dev/null
+          echo 'DefaultTimeoutStartSec=10s'  | sudo tee -a chroot/etc/systemd/system.conf.d/timeout.conf > /dev/null
+          echo 'DefaultTimeoutStopSec=5s'    | sudo tee -a chroot/etc/systemd/system.conf.d/timeout.conf > /dev/null
+          echo 'ShutdownWatchdogSec=10s'     | sudo tee -a chroot/etc/systemd/system.conf.d/timeout.conf > /dev/null
 
           # ── OS branding ───────────────────────────────────────────────────────
           echo 'PRETTY_NAME="RIDOS OS v1.1.0 Baghdad"' | sudo tee    chroot/etc/os-release > /dev/null
@@ -339,11 +331,13 @@ jobs:
 
           # ── Kernel sysctl tweaks ──────────────────────────────────────────────
           sudo mkdir -p chroot/etc/sysctl.d
-          echo 'vm.swappiness=10'           | sudo tee    chroot/etc/sysctl.d/99-ridos.conf > /dev/null
-          echo 'vm.vfs_cache_pressure=50'   | sudo tee -a chroot/etc/sysctl.d/99-ridos.conf > /dev/null
-          echo 'kernel.printk=3 4 1 3'     | sudo tee -a chroot/etc/sysctl.d/99-ridos.conf > /dev/null
+          echo 'vm.swappiness=10'         | sudo tee    chroot/etc/sysctl.d/99-ridos.conf > /dev/null
+          echo 'vm.vfs_cache_pressure=50' | sudo tee -a chroot/etc/sysctl.d/99-ridos.conf > /dev/null
+          echo 'kernel.printk=3 4 1 3'   | sudo tee -a chroot/etc/sysctl.d/99-ridos.conf > /dev/null
 
+          sudo chroot chroot chown ridos:ridos /home/ridos/.bash_profile /home/ridos/.xinitrc
           echo "System configured"
+
       # ── Step 5: Apply RIDOS branding and theme ───────────────────────────────
       - name: Apply RIDOS branding and theme
         run: |
