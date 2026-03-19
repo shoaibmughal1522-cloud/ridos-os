@@ -15,7 +15,7 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Install build dependencies
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y \
@@ -23,9 +23,9 @@ jobs:
             grub-pc-bin grub-efi-amd64-bin grub2-common \
             mtools dosfstools gnupg2 curl wget \
             imagemagick librsvg2-bin
-          echo "Done"
+          echo "✅ Build dependencies installed"
 
-      - name: Bootstrap Debian
+      - name: Bootstrap Debian bookworm
         run: |
           curl -fsSL https://ftp-master.debian.org/keys/release-12.asc \
             | sudo gpg --dearmor -o /usr/share/keyrings/debian-bookworm.gpg
@@ -35,20 +35,17 @@ jobs:
             --keyring=/usr/share/keyrings/debian-bookworm.gpg \
             --include=systemd,systemd-sysv,udev,sudo,locales,bash,apt-transport-https,ca-certificates \
             bookworm chroot http://deb.debian.org/debian/
-          echo "Bootstrap done"
+          echo "✅ Bootstrap done"
 
       - name: Install all packages
         run: |
-          sudo mount --bind /dev chroot/dev
+          sudo mount --bind /dev  chroot/dev
           sudo mount --bind /proc chroot/proc
-          sudo mount --bind /sys chroot/sys
-          sudo mount --bind /run chroot/run
+          sudo mount --bind /sys  chroot/sys
+          sudo mount --bind /run  chroot/run
 
-          sudo tee chroot/etc/apt/sources.list << 'EOF'
-          deb http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware
-          deb http://deb.debian.org/debian bookworm-updates main contrib non-free non-free-firmware
-          deb http://security.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware
-          EOF
+          # Fix sources.list - NO leading spaces
+          printf 'deb http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware\ndeb http://deb.debian.org/debian bookworm-updates main contrib non-free non-free-firmware\ndeb http://security.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware\n' | sudo tee chroot/etc/apt/sources.list > /dev/null
 
           sudo chroot chroot apt-get update -qq
 
@@ -56,7 +53,7 @@ jobs:
           sudo chroot chroot apt-get install -y \
             live-boot live-boot-initramfs-tools \
             linux-image-amd64 initramfs-tools \
-            grub-pc grub2-common \
+            grub-pc grub-efi-amd64 grub2-common \
             bash-completion tzdata locales
 
           # Hardware drivers
@@ -65,8 +62,7 @@ jobs:
             firmware-iwlwifi firmware-atheros firmware-realtek \
             firmware-b43-installer firmware-amd-graphics \
             firmware-misc-nonfree intel-microcode amd64-microcode \
-            xserver-xorg xserver-xorg-video-all \
-            xserver-xorg-input-all \
+            xserver-xorg xserver-xorg-video-all xserver-xorg-input-all \
             xserver-xorg-video-intel xserver-xorg-video-amdgpu \
             xserver-xorg-video-nouveau xserver-xorg-video-fbdev \
             xserver-xorg-video-vesa \
@@ -74,11 +70,11 @@ jobs:
             bluez bluetooth \
             cups printer-driver-all \
             network-manager network-manager-gnome \
-            wpasupplicant wireless-tools \
-            usb-modeswitch pciutils usbutils \
-            acpi acpid laptop-detect \
+            wpasupplicant wireless-tools usb-modeswitch \
+            pciutils usbutils acpi acpid laptop-detect \
             ntfs-3g exfat-fuse \
             --no-install-recommends || true
+          echo "✅ Hardware drivers installed"
 
           # XFCE Desktop
           sudo chroot chroot apt-get install -y \
@@ -88,11 +84,33 @@ jobs:
             thunar thunar-archive-plugin \
             ristretto mousepad \
             adwaita-icon-theme papirus-icon-theme \
-            fonts-dejavu fonts-liberation fonts-noto \
-            fonts-noto-color-emoji
+            fonts-dejavu fonts-liberation fonts-noto fonts-noto-color-emoji
+          echo "✅ XFCE Desktop installed"
+
+          # VirtualBox Guest Additions & VM tools
+          sudo chroot chroot apt-get install -y \
+            virtualbox-guest-utils virtualbox-guest-x11 \
+            open-vm-tools open-vm-tools-desktop \
+            spice-vdagent || true
+          echo "✅ VM guest tools installed"
 
           # Browsers
           sudo chroot chroot apt-get install -y firefox-esr
+          echo "✅ Firefox installed"
+
+          # Calamares installer - install individually for better error tracking
+          echo "Installing Calamares..."
+          sudo chroot chroot apt-get install -y calamares && echo "✅ calamares OK" || echo "❌ calamares FAILED"
+          sudo chroot chroot apt-get install -y calamares-settings-debian && echo "✅ calamares-settings OK" || true
+          sudo chroot chroot apt-get install -y qml-module-qtquick2 qml-module-qtquick-controls2 qml-module-qtquick-layouts && echo "✅ QML modules OK" || true
+          sudo chroot chroot apt-get install -y python3-pyqt5 && echo "✅ PyQt5 OK" || true
+          sudo chroot chroot apt-get install -y efibootmgr os-prober && echo "✅ efibootmgr OK" || true
+          # Verify Calamares
+          if [ -f chroot/usr/bin/calamares ]; then
+            echo "✅ Calamares installed successfully"
+          else
+            echo "❌ Calamares NOT installed"
+          fi
 
           # Dev & IT tools
           sudo chroot chroot apt-get install -y \
@@ -107,731 +125,709 @@ jobs:
             parted gparted \
             rsync dosfstools \
             smartmontools hdparm \
-            memtest86+ \
-            lshw dmidecode \
+            memtest86+ lshw dmidecode \
             iotop iftop \
             wireshark-common tshark \
             squashfs-tools
+          echo "✅ Dev & IT tools installed"
 
-          sudo umount chroot/run chroot/sys chroot/proc chroot/dev
-          echo "All packages installed"
+          # Unmount in correct order
+          sudo umount chroot/run || true
+          sudo umount chroot/sys || true
+          sudo umount chroot/proc || true
+          sudo umount chroot/dev || true
+          echo "✅ All packages installed"
 
       - name: Configure system
         run: |
-          echo "ridos-os" | sudo tee chroot/etc/hostname
+          echo "ridos-os" | sudo tee chroot/etc/hostname > /dev/null
 
-          sudo tee chroot/etc/hosts << 'EOF'
-          127.0.0.1 localhost
-          127.0.1.1 ridos-os
-          EOF
+          # Fix /etc/hosts - NO leading spaces
+          printf '127.0.0.1 localhost\n127.0.1.1 ridos-os\n::1 localhost ip6-localhost ip6-loopback\n' | sudo tee chroot/etc/hosts > /dev/null
 
-          echo "en_US.UTF-8 UTF-8" | sudo tee chroot/etc/locale.gen
-          echo "ar_IQ.UTF-8 UTF-8" | sudo tee -a chroot/etc/locale.gen
+          echo "en_US.UTF-8 UTF-8" | sudo tee chroot/etc/locale.gen > /dev/null
+          echo "ar_IQ.UTF-8 UTF-8" | sudo tee -a chroot/etc/locale.gen > /dev/null
           sudo chroot chroot locale-gen
-          echo "LANG=en_US.UTF-8" | sudo tee chroot/etc/default/locale
+          echo "LANG=en_US.UTF-8" | sudo tee chroot/etc/default/locale > /dev/null
 
           sudo chroot chroot ln -sf /usr/share/zoneinfo/Asia/Baghdad /etc/localtime
 
+          # Create ridos user
           sudo chroot chroot useradd -m -s /bin/bash \
             -G sudo,audio,video,netdev,plugdev,bluetooth ridos
           echo "ridos:ridos" | sudo chroot chroot chpasswd
-          echo "root:ridos" | sudo chroot chroot chpasswd
+          echo "root:ridos"  | sudo chroot chroot chpasswd
 
-          # LightDM - show login screen (NO autologin)
+          # LightDM login screen with RIDOS branding
           sudo mkdir -p chroot/etc/lightdm/lightdm.conf.d
-          sudo tee chroot/etc/lightdm/lightdm.conf.d/50-ridos.conf << 'EOF'
-          [Seat:*]
-          user-session=xfce
-          greeter-session=lightdm-gtk-greeter
-          EOF
+          sudo tee chroot/etc/lightdm/lightdm.conf.d/50-ridos.conf > /dev/null << 'EOF'
+[Seat:*]
+user-session=xfce
+greeter-session=lightdm-gtk-greeter
+EOF
 
-          # LightDM RIDOS branding on login screen
-          sudo tee chroot/etc/lightdm/lightdm-gtk-greeter.conf << 'EOF'
-          [greeter]
-          background=#6B21A8
-          theme-name=Adwaita-dark
-          icon-theme-name=Papirus-Dark
-          font-name=Noto Sans 11
-          indicators=~host;~spacer;~clock;~spacer;~power
-          clock-format=%A, %d %B %Y  %H:%M
-          position=50%,center 50%,center
-          EOF
+          sudo tee chroot/etc/lightdm/lightdm-gtk-greeter.conf > /dev/null << 'EOF'
+[greeter]
+background=#6B21A8
+theme-name=Adwaita-dark
+icon-theme-name=Papirus-Dark
+font-name=Noto Sans 11
+indicators=~host;~spacer;~clock;~spacer;~power
+clock-format=%A, %d %B %Y  %H:%M
+position=50%,center 50%,center
+EOF
 
-          # RIDOS OS release branding
-          sudo tee chroot/etc/os-release << 'EOF'
-          PRETTY_NAME="RIDOS OS v1.1.0 Baghdad"
-          NAME="RIDOS OS"
-          VERSION_ID="1.1.0"
-          VERSION="1.1.0 (Baghdad)"
-          ID=ridos
-          ID_LIKE=debian
-          HOME_URL="https://github.com/alexeaiskinder-mea/ridos-os"
-          SUPPORT_URL="https://github.com/alexeaiskinder-mea/ridos-os/issues"
-          BUG_REPORT_URL="https://github.com/alexeaiskinder-mea/ridos-os/issues"
-          EOF
+          # RIDOS OS branding
+          sudo tee chroot/etc/os-release > /dev/null << 'EOF'
+PRETTY_NAME="RIDOS OS v1.1.0 Baghdad"
+NAME="RIDOS OS"
+VERSION_ID="1.1.0"
+VERSION="1.1.0 (Baghdad)"
+ID=ridos
+ID_LIKE=debian
+HOME_URL="https://github.com/alexeaiskinder-mea/ridos-os"
+SUPPORT_URL="https://github.com/alexeaiskinder-mea/ridos-os/issues"
+BUG_REPORT_URL="https://github.com/alexeaiskinder-mea/ridos-os/issues"
+EOF
 
-          sudo tee chroot/etc/issue << 'EOF'
-          RIDOS OS v1.1.0 Baghdad - AI-Powered Linux
-          Username: ridos | Password: ridos
-          EOF
+          sudo tee chroot/etc/issue > /dev/null << 'EOF'
+RIDOS OS v1.1.0 Baghdad - AI-Powered Linux
+Username: ridos | Password: ridos
+EOF
 
-          # Fast shutdown 5 seconds
+          # Fast shutdown
           sudo mkdir -p chroot/etc/systemd/system.conf.d
-          sudo tee chroot/etc/systemd/system.conf.d/timeout.conf << 'EOF'
-          [Manager]
-          DefaultTimeoutStopSec=5s
-          DefaultTimeoutStartSec=10s
-          ShutdownWatchdogSec=10s
-          EOF
+          sudo tee chroot/etc/systemd/system.conf.d/timeout.conf > /dev/null << 'EOF'
+[Manager]
+DefaultTimeoutStopSec=5s
+DefaultTimeoutStartSec=10s
+ShutdownWatchdogSec=10s
+EOF
 
           # Enable services
-          sudo chroot chroot systemctl enable lightdm NetworkManager \
-            bluetooth cups acpid 2>/dev/null || true
-
-          echo "System configured"
-
-      - name: Install Calamares graphical installer
-        run: |
-          sudo mount --bind /dev chroot/dev
-          sudo mount --bind /proc chroot/proc
-          sudo mount --bind /sys chroot/sys
-          sudo mount --bind /run chroot/run
-
-          # Add Calamares repo for Debian bookworm
-          sudo chroot chroot bash -c "
-            apt-get update -qq
-            # Try installing Calamares with all Qt dependencies
-            DEBIAN_FRONTEND=noninteractive apt-get install -y               calamares               calamares-settings-debian               qml-module-qtquick2               qml-module-qtquick-controls2               qml-module-qtquick-layouts               python3-pyqt5               python3-pyqt5.qtwebengine               libkpmcore12               libqt5core5a               libqt5widgets5               libqt5dbus5               libqt5network5               libqt5xml5               libqt5svg5               qt5-gtk-platformtheme               || echo 'WARNING: Calamares install had issues - trying minimal install'
-            # Fallback: minimal calamares
-            DEBIAN_FRONTEND=noninteractive apt-get install -y calamares ||               echo 'WARNING: Calamares not available - using custom installer'
-          "
-
-          sudo umount chroot/run chroot/sys chroot/proc chroot/dev
-          # Verify installation
-          if [ -f chroot/usr/bin/calamares ]; then
-            echo "✅ Calamares installed successfully"
-          else
-            echo "⚠️  Calamares not installed - custom installer will be used"
-          fi
+          sudo chroot chroot systemctl enable lightdm 2>/dev/null || true
+          sudo chroot chroot systemctl enable NetworkManager 2>/dev/null || true
+          sudo chroot chroot systemctl enable bluetooth 2>/dev/null || true
+          sudo chroot chroot systemctl enable cups 2>/dev/null || true
+          sudo chroot chroot systemctl enable acpid 2>/dev/null || true
+          sudo chroot chroot systemctl enable ssh 2>/dev/null || true
+          sudo chroot chroot systemctl enable spice-vdagentd 2>/dev/null || true
+          sudo chroot chroot systemctl enable ridos-dashboard 2>/dev/null || true
+          echo "✅ System configured"
 
       - name: Configure Calamares installer
         run: |
-          # Create Calamares directory structure
           sudo mkdir -p chroot/etc/calamares/branding/ridos
           sudo mkdir -p chroot/etc/calamares/modules
 
-          # Main settings.conf
-          sudo tee chroot/etc/calamares/settings.conf << 'EOF'
-          ---
-          modules-search: [ local ]
+          # settings.conf - NO leading spaces (YAML is space-sensitive)
+          sudo tee chroot/etc/calamares/settings.conf > /dev/null << 'EOF'
+---
+modules-search: [ local ]
 
-          sequence:
-            - show:
-                - welcome
-                - locale
-                - keyboard
-                - partition
-                - users
-                - summary
-            - exec:
-                - partition
-                - mount
-                - unpackfs
-                - machineid
-                - fstab
-                - locale
-                - keyboard
-                - users
-                - displaymanager
-                - networkcfg
-                - grubcfg
-                - bootloader
-                - finished
+sequence:
+  - show:
+      - welcome
+      - locale
+      - keyboard
+      - partition
+      - users
+      - summary
+  - exec:
+      - partition
+      - mount
+      - unpackfs
+      - machineid
+      - fstab
+      - locale
+      - keyboard
+      - users
+      - displaymanager
+      - networkcfg
+      - grubcfg
+      - bootloader
+      - finished
 
-          branding: ridos
-          prompt-install: false
-          dont-chroot: false
-          EOF
+branding: ridos
+prompt-install: false
+dont-chroot: false
+EOF
 
-          # Branding descriptor
-          sudo tee chroot/etc/calamares/branding/ridos/branding.desc << 'EOF'
-          ---
-          componentName: ridos
-          welcomeStyleCalamares: true
+          # branding.desc - NO leading spaces
+          sudo tee chroot/etc/calamares/branding/ridos/branding.desc > /dev/null << 'EOF'
+---
+componentName: ridos
+welcomeStyleCalamares: true
 
-          strings:
-            productName: RIDOS OS
-            shortProductName: RIDOS
-            version: "1.1.0"
-            shortVersion: "1.1"
-            versionedName: "RIDOS OS 1.1.0"
-            shortVersionedName: "RIDOS 1.1"
-            bootloaderEntryName: RIDOS
-            productUrl: "https://github.com/alexeaiskinder-mea/ridos-os"
-            supportUrl: "https://github.com/alexeaiskinder-mea/ridos-os/issues"
-            releaseNotesUrl: "https://github.com/alexeaiskinder-mea/ridos-os"
+strings:
+  productName: RIDOS OS
+  shortProductName: RIDOS
+  version: "1.1.0"
+  shortVersion: "1.1"
+  versionedName: "RIDOS OS 1.1.0"
+  shortVersionedName: "RIDOS 1.1"
+  bootloaderEntryName: RIDOS
+  productUrl: "https://github.com/alexeaiskinder-mea/ridos-os"
+  supportUrl: "https://github.com/alexeaiskinder-mea/ridos-os/issues"
+  releaseNotesUrl: "https://github.com/alexeaiskinder-mea/ridos-os"
 
-          images:
-            productLogo: "logo.png"
-            productIcon: "logo.png"
-            productWelcome: "languages.png"
+images:
+  productLogo: "logo.png"
+  productIcon: "logo.png"
+  productWelcome: "languages.png"
 
-          slideshow: "show.qml"
+slideshow: "show.qml"
 
-          style:
-            sidebarBackground: "#1E1B4B"
-            sidebarText: "#FFFFFF"
-            sidebarTextSelect: "#6B21A8"
-          EOF
+style:
+  sidebarBackground: "#1E1B4B"
+  sidebarText: "#FFFFFF"
+  sidebarTextSelect: "#6B21A8"
+EOF
 
-          # Welcome QML slide
-          sudo tee chroot/etc/calamares/branding/ridos/show.qml << 'EOF'
-          import QtQuick 2.0
+          # show.qml welcome slide
+          sudo tee chroot/etc/calamares/branding/ridos/show.qml > /dev/null << 'EOF'
+import QtQuick 2.0
 
-          Rectangle {
-              color: "#1E1B4B"
-              width: 800
-              height: 500
+Rectangle {
+    color: "#1E1B4B"
+    width: 800
+    height: 500
 
-              Column {
-                  anchors.centerIn: parent
-                  spacing: 20
+    Column {
+        anchors.centerIn: parent
+        spacing: 20
 
-                  Text {
-                      anchors.horizontalCenter: parent.horizontalCenter
-                      text: "RIDOS OS"
-                      color: "#C4B5FD"
-                      font.pointSize: 36
-                      font.bold: true
-                  }
-                  Text {
-                      anchors.horizontalCenter: parent.horizontalCenter
-                      text: "ريدوس أو إس"
-                      color: "#C4B5FD"
-                      font.pointSize: 24
-                  }
-                  Text {
-                      anchors.horizontalCenter: parent.horizontalCenter
-                      text: "v1.1.0 Baghdad"
-                      color: "#E9D5FF"
-                      font.pointSize: 16
-                  }
-                  Text {
-                      anchors.horizontalCenter: parent.horizontalCenter
-                      text: "AI-Powered Linux for IT Professionals"
-                      color: "#DDD6FE"
-                      font.pointSize: 14
-                  }
-                  Text {
-                      anchors.horizontalCenter: parent.horizontalCenter
-                      text: "نظام لينكس المدعوم بالذكاء الاصطناعي لمحترفي تقنية المعلومات"
-                      color: "#DDD6FE"
-                      font.pointSize: 12
-                  }
-              }
-          }
-          EOF
+        Text {
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: "RIDOS OS"
+            color: "#C4B5FD"
+            font.pointSize: 36
+            font.bold: true
+        }
+        Text {
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: "ريدوس أو إس"
+            color: "#C4B5FD"
+            font.pointSize: 24
+        }
+        Text {
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: "v1.1.0 Baghdad"
+            color: "#E9D5FF"
+            font.pointSize: 16
+        }
+        Text {
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: "AI-Powered Linux for IT Professionals"
+            color: "#DDD6FE"
+            font.pointSize: 14
+        }
+        Text {
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: "نظام لينكس المدعوم بالذكاء الاصطناعي لمحترفي تقنية المعلومات"
+            color: "#DDD6FE"
+            font.pointSize: 12
+        }
+    }
+}
+EOF
 
-          # Partition module config
-          sudo tee chroot/etc/calamares/modules/partition.conf << 'EOF'
-          ---
-          efiSystemPartition: "/boot/efi"
-          defaultPartitionTableType: gpt
-          availableFileSystemTypes: [ ext4, btrfs, xfs ]
-          initialPartitioningChoice: erase
-          initialSwapChoice: small
-          EOF
+          # partition.conf
+          sudo tee chroot/etc/calamares/modules/partition.conf > /dev/null << 'EOF'
+---
+efiSystemPartition: "/boot/efi"
+defaultPartitionTableType: gpt
+availableFileSystemTypes: [ ext4, btrfs, xfs ]
+initialPartitioningChoice: erase
+initialSwapChoice: small
+EOF
 
-          # Users module config
-          sudo tee chroot/etc/calamares/modules/users.conf << 'EOF'
-          ---
-          defaultGroups:
-            - sudo
-            - audio
-            - video
-            - netdev
-            - plugdev
-            - bluetooth
-            - storage
-          autologinGroup: autologin
-          doAutologin: false
-          sudoersGroup: sudo
-          setRootPassword: true
-          passwordRequirements:
-            minLength: 6
-          EOF
+          # users.conf
+          sudo tee chroot/etc/calamares/modules/users.conf > /dev/null << 'EOF'
+---
+defaultGroups:
+  - sudo
+  - audio
+  - video
+  - netdev
+  - plugdev
+  - bluetooth
+  - storage
+autologinGroup: autologin
+doAutologin: false
+sudoersGroup: sudo
+setRootPassword: true
+passwordRequirements:
+  minLength: 6
+EOF
 
-          # Unpackfs module - tells Calamares where the squashfs is
-          sudo tee chroot/etc/calamares/modules/unpackfs.conf << 'EOF'
-          ---
-          unpack:
-            - source: "/run/live/medium/live/filesystem.squashfs"
-              sourcefs: "squashfs"
-              destination: ""
-          EOF
+          # unpackfs.conf
+          sudo tee chroot/etc/calamares/modules/unpackfs.conf > /dev/null << 'EOF'
+---
+unpack:
+  - source: "/run/live/medium/live/filesystem.squashfs"
+    sourcefs: "squashfs"
+    destination: ""
+EOF
 
-          # Display manager module
-          sudo tee chroot/etc/calamares/modules/displaymanager.conf << 'EOF'
-          ---
-          displaymanagers:
-            - lightdm
-          defaultDesktopEnvironment:
-            executable: "startxfce4"
-            desktopFile: "xfce.desktop"
-          EOF
+          # displaymanager.conf
+          sudo tee chroot/etc/calamares/modules/displaymanager.conf > /dev/null << 'EOF'
+---
+displaymanagers:
+  - lightdm
+defaultDesktopEnvironment:
+  executable: "startxfce4"
+  desktopFile: "xfce.desktop"
+EOF
 
-          # Bootloader module
-          sudo tee chroot/etc/calamares/modules/bootloader.conf << 'EOF'
-          ---
-          efiBootLoader: "grub"
-          grubInstall: "grub-install"
-          grubMkconfig: "update-grub"
-          grubCfg: "/boot/grub/grub.cfg"
-          grubProbe: "grub-probe"
-          efiInstallerPath: "/usr/bin/efibootmgr"
-          installEFIFallback: true
-          EOF
+          # bootloader.conf
+          sudo tee chroot/etc/calamares/modules/bootloader.conf > /dev/null << 'EOF'
+---
+efiBootLoader: "grub"
+grubInstall: "grub-install"
+grubMkconfig: "update-grub"
+grubCfg: "/boot/grub/grub.cfg"
+grubProbe: "grub-probe"
+efiInstallerPath: "/usr/bin/efibootmgr"
+installEFIFallback: true
+EOF
 
           # GRUB branding
-          sudo tee chroot/etc/default/grub << 'EOF'
-          GRUB_DEFAULT=0
-          GRUB_TIMEOUT=5
-          GRUB_DISTRIBUTOR="RIDOS OS"
-          GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"
-          GRUB_CMDLINE_LINUX=""
-          EOF
+          sudo tee chroot/etc/default/grub > /dev/null << 'EOF'
+GRUB_DEFAULT=0
+GRUB_TIMEOUT=5
+GRUB_DISTRIBUTOR="RIDOS OS"
+GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"
+GRUB_CMDLINE_LINUX=""
+EOF
 
-          # Create a placeholder logo (purple square with text)
-          convert -size 200x200             gradient:"#6B21A8-#1E1B4B"             -font DejaVu-Sans-Bold -pointsize 32             -fill white -gravity center             -annotate 0 "RIDOS"             chroot/etc/calamares/branding/ridos/logo.png 2>/dev/null ||           convert -size 200x200 xc:"#6B21A8"             -fill white -gravity center             -annotate 0 "RIDOS"             chroot/etc/calamares/branding/ridos/logo.png 2>/dev/null || true
+          # Generate Calamares logo
+          convert -size 200x200 \
+            gradient:"#6B21A8-#1E1B4B" \
+            -font DejaVu-Sans-Bold \
+            -pointsize 32 \
+            -fill white \
+            -gravity center \
+            -annotate 0 "RIDOS" \
+            chroot/etc/calamares/branding/ridos/logo.png 2>/dev/null || \
+          convert -size 200x200 xc:"#6B21A8" \
+            -fill white -gravity center \
+            -annotate 0 "RIDOS" \
+            chroot/etc/calamares/branding/ridos/logo.png 2>/dev/null || true
 
-          # Copy logo to languages placeholder
-          sudo cp chroot/etc/calamares/branding/ridos/logo.png                   chroot/etc/calamares/branding/ridos/languages.png 2>/dev/null || true
+          sudo cp chroot/etc/calamares/branding/ridos/logo.png \
+                  chroot/etc/calamares/branding/ridos/languages.png 2>/dev/null || true
 
-          echo "Calamares configured"
+          echo "✅ Calamares configured"
+          echo "Config files:"
+          ls -la chroot/etc/calamares/
+          ls -la chroot/etc/calamares/branding/ridos/
+          ls -la chroot/etc/calamares/modules/
 
       - name: Apply RIDOS branding and theme
         run: |
           sudo mkdir -p chroot/home/ridos/.config/xfce4/xfconf/xfce-perchannel-xml
 
-          sudo tee chroot/home/ridos/.config/xfce4/xfconf/xfce-perchannel-xml/xsettings.xml << 'EOF'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <channel name="xsettings" version="1.0">
-            <property name="Net" type="empty">
-              <property name="ThemeName" type="string" value="Adwaita-dark"/>
-              <property name="IconThemeName" type="string" value="Papirus-Dark"/>
-            </property>
-            <property name="Gtk" type="empty">
-              <property name="FontName" type="string" value="Noto Sans 10"/>
-              <property name="MonospaceFontName" type="string" value="Noto Mono 10"/>
-              <property name="CursorThemeName" type="string" value="Adwaita"/>
-            </property>
-          </channel>
-          EOF
+          # XFCE dark theme
+          sudo tee chroot/home/ridos/.config/xfce4/xfconf/xfce-perchannel-xml/xsettings.xml > /dev/null << 'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xsettings" version="1.0">
+  <property name="Net" type="empty">
+    <property name="ThemeName" type="string" value="Adwaita-dark"/>
+    <property name="IconThemeName" type="string" value="Papirus-Dark"/>
+  </property>
+  <property name="Gtk" type="empty">
+    <property name="FontName" type="string" value="Noto Sans 10"/>
+    <property name="MonospaceFontName" type="string" value="Noto Mono 10"/>
+    <property name="CursorThemeName" type="string" value="Adwaita"/>
+  </property>
+</channel>
+EOF
 
-          sudo tee chroot/home/ridos/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml << 'EOF'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <channel name="xfce4-desktop" version="1.0">
-            <property name="backdrop" type="empty">
-              <property name="screen0" type="empty">
-                <property name="monitorVirtual1" type="empty">
-                  <property name="workspace0" type="empty">
-                    <property name="color-style" type="int" value="0"/>
-                    <property name="image-style" type="int" value="0"/>
-                    <property name="rgba1" type="array">
-                      <value type="double" value="0.419"/>
-                      <value type="double" value="0.129"/>
-                      <value type="double" value="0.659"/>
-                      <value type="double" value="1.000"/>
-                    </property>
-                  </property>
-                </property>
-              </property>
-            </property>
-          </channel>
-          EOF
+          # XFCE wallpaper config
+          sudo tee chroot/home/ridos/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml > /dev/null << 'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfce4-desktop" version="1.0">
+  <property name="backdrop" type="empty">
+    <property name="screen0" type="empty">
+      <property name="monitorVirtual1" type="empty">
+        <property name="workspace0" type="empty">
+          <property name="color-style" type="int" value="0"/>
+          <property name="image-style" type="int" value="5"/>
+          <property name="last-image" type="string" value="/usr/share/ridos/ridos-wallpaper.png"/>
+        </property>
+      </property>
+      <property name="monitorVirtual-1" type="empty">
+        <property name="workspace0" type="empty">
+          <property name="color-style" type="int" value="0"/>
+          <property name="image-style" type="int" value="5"/>
+          <property name="last-image" type="string" value="/usr/share/ridos/ridos-wallpaper.png"/>
+        </property>
+      </property>
+    </property>
+  </property>
+</channel>
+EOF
 
-          sudo tee chroot/home/ridos/.config/xfce4/xfconf/xfce-perchannel-xml/xfwm4.xml << 'EOF'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <channel name="xfwm4" version="1.0">
-            <property name="general" type="empty">
-              <property name="theme" type="string" value="Default-dark"/>
-              <property name="title_font" type="string" value="Noto Sans Bold 10"/>
-            </property>
-          </channel>
-          EOF
+          # XFCE window manager
+          sudo tee chroot/home/ridos/.config/xfce4/xfconf/xfce-perchannel-xml/xfwm4.xml > /dev/null << 'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfwm4" version="1.0">
+  <property name="general" type="empty">
+    <property name="theme" type="string" value="Default-dark"/>
+    <property name="title_font" type="string" value="Noto Sans Bold 10"/>
+  </property>
+</channel>
+EOF
 
-          # Desktop shortcuts
+          # XFCE terminal colors
+          sudo mkdir -p chroot/home/ridos/.config/xfce4/terminal
+          sudo tee chroot/home/ridos/.config/xfce4/terminal/terminalrc > /dev/null << 'EOF'
+[Configuration]
+ColorForeground=#E9D5FF
+ColorBackground=#0F0A1E
+ColorCursor=#7C3AED
+FontName=Noto Mono 11
+MiscBellUrgent=FALSE
+EOF
+
+          # Clean 6-icon desktop layout
           sudo mkdir -p chroot/home/ridos/Desktop
 
-          # AI Shell shortcut
-          sudo tee chroot/home/ridos/Desktop/ridos-ai.desktop << 'EOF'
-          [Desktop Entry]
-          Version=1.0
-          Type=Application
-          Name=RIDOS AI Shell
-          Comment=AI-powered IT Assistant
-          Exec=xfce4-terminal --title="RIDOS AI Shell" -e "python3 /opt/ridos/bin/ridos_shell.py"
-          Icon=utilities-terminal
-          Terminal=false
-          Categories=System;
-          EOF
+          sudo tee chroot/home/ridos/Desktop/01-ridos-dashboard.desktop > /dev/null << 'EOF'
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=RIDOS Dashboard
+Comment=RIDOS OS Control Center
+Exec=firefox-esr /opt/ridos/bin/ridos-dashboard.html
+Icon=/usr/share/ridos/ridos-icon.png
+Terminal=false
+Categories=System;
+EOF
 
-          # Firefox shortcut
-          sudo tee chroot/home/ridos/Desktop/firefox.desktop << 'EOF'
-          [Desktop Entry]
-          Version=1.0
-          Type=Application
-          Name=Firefox Browser
-          Exec=firefox-esr %u
-          Icon=firefox-esr
-          Terminal=false
-          Categories=Network;WebBrowser;
-          EOF
+          sudo tee chroot/home/ridos/Desktop/02-ridos-ai-tools.desktop > /dev/null << 'EOF'
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=RIDOS AI Tools
+Comment=AI Shell, Network, Hardware, Security
+Exec=xfce4-terminal --title="RIDOS AI Tools" -e "python3 /opt/ridos/bin/ai_features.py"
+Icon=utilities-system-monitor
+Terminal=false
+Categories=System;Network;
+EOF
 
-          # Install to HDD shortcut
-          sudo tee chroot/home/ridos/Desktop/install-ridos.desktop << 'EOF'
-          [Desktop Entry]
-          Version=1.0
-          Type=Application
-          Name=Install RIDOS OS
-          Comment=Install RIDOS OS permanently to your hard drive
-          Exec=bash -c "if [ -f /usr/bin/calamares ]; then pkexec /usr/bin/calamares; else xfce4-terminal -e 'sudo /opt/ridos/bin/ridos-install.sh'; fi"
-          Icon=drive-harddisk
-          Terminal=false
-          Categories=System;
-          EOF
+          sudo tee chroot/home/ridos/Desktop/03-firefox.desktop > /dev/null << 'EOF'
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Firefox Browser
+Exec=firefox-esr %u
+Icon=firefox-esr
+Terminal=false
+Categories=Network;WebBrowser;
+EOF
 
-          sudo tee chroot/home/ridos/Desktop/ai-features.desktop << 'EOF'
-          [Desktop Entry]
-          Version=1.0
-          Type=Application
-          Name=RIDOS AI Tools
-          Comment=AI Network Analyzer, System Doctor, Security Scanner
-          Exec=xfce4-terminal --title="RIDOS AI Tools" -e "python3 /opt/ridos/bin/ai_features.py"
-          Icon=utilities-system-monitor
-          Terminal=false
-          Categories=System;Network;
-          EOF
+          sudo tee chroot/home/ridos/Desktop/04-files.desktop > /dev/null << 'EOF'
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=File Manager
+Exec=thunar
+Icon=system-file-manager
+Terminal=false
+Categories=System;FileManager;
+EOF
 
-          sudo tee chroot/home/ridos/Desktop/system-doctor.desktop << 'EOF'
-          [Desktop Entry]
-          Version=1.0
-          Type=Application
-          Name=AI System Doctor
-          Comment=AI health check | طبيب النظام الذكي
-          Exec=xfce4-terminal --title="AI System Doctor" -e "bash -c 'python3 /opt/ridos/bin/ai_features.py 2; read'"
-          Icon=utilities-system-monitor
-          Terminal=false
-          Categories=System;
-          EOF
+          sudo tee chroot/home/ridos/Desktop/05-terminal.desktop > /dev/null << 'EOF'
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Terminal
+Exec=xfce4-terminal
+Icon=utilities-terminal
+Terminal=false
+Categories=System;
+EOF
 
-          sudo tee chroot/home/ridos/Desktop/hardware-fixer.desktop << 'EOF'
-          [Desktop Entry]
-          Version=1.0
-          Type=Application
-          Name=AI Hardware Fixer
-          Comment=HDD/SSD/NVMe/RAM diagnostics | فحص وإصلاح العتاد
-          Exec=xfce4-terminal --title="AI Hardware Fixer" -e "bash -c 'python3 /opt/ridos/bin/ai_features.py 4; read'"
-          Icon=drive-harddisk
-          Terminal=false
-          Categories=System;
-          EOF
-
-          sudo tee chroot/home/ridos/Desktop/security-scanner.desktop << 'EOF'
-          [Desktop Entry]
-          Version=1.0
-          Type=Application
-          Name=AI Security Scanner
-          Comment=AI cybersecurity scanner | الماسح الأمني الذكي
-          Exec=xfce4-terminal --title="AI Security Scanner" -e "bash -c 'python3 /opt/ridos/bin/ai_features.py 5; read'"
-          Icon=security-high
-          Terminal=false
-          Categories=System;Network;
-          EOF
-
-          sudo tee chroot/home/ridos/Desktop/network-analyzer.desktop << 'EOF'
-          [Desktop Entry]
-          Version=1.0
-          Type=Application
-          Name=AI Network Analyzer
-          Comment=Advanced network analysis | محلل الشبكة المتقدم
-          Exec=xfce4-terminal --title="AI Network Analyzer" -e "bash -c 'python3 /opt/ridos/bin/ai_features.py 3; read'"
-          Icon=network-wired
-          Terminal=false
-          Categories=Network;System;
-          EOF
+          sudo tee chroot/home/ridos/Desktop/06-install-ridos.desktop > /dev/null << 'EOF'
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Install RIDOS OS
+Comment=Install RIDOS OS to hard drive
+Exec=bash -c "if [ -f /usr/bin/calamares ]; then pkexec /usr/bin/calamares; else xfce4-terminal --title='RIDOS Installer' -e 'sudo /opt/ridos/bin/ridos-install.sh'; fi"
+Icon=drive-harddisk
+Terminal=false
+Categories=System;
+EOF
 
           sudo chmod +x chroot/home/ridos/Desktop/*.desktop
-          sudo tee chroot/home/ridos/.config/xfce4/helpers.rc << 'EOF'
-          TerminalEmulator=xfce4-terminal
-          EOF
+
+          # XFCE helpers
+          sudo tee chroot/home/ridos/.config/xfce4/helpers.rc > /dev/null << 'EOF'
+TerminalEmulator=xfce4-terminal
+EOF
 
           # Plymouth boot splash
           sudo mkdir -p chroot/usr/share/plymouth/themes/ridos
-          sudo tee chroot/usr/share/plymouth/themes/ridos/ridos.plymouth << 'EOF'
-          [Plymouth Theme]
-          Name=RIDOS OS
-          Description=RIDOS OS Boot Splash
-          ModuleName=script
+          sudo tee chroot/usr/share/plymouth/themes/ridos/ridos.plymouth > /dev/null << 'EOF'
+[Plymouth Theme]
+Name=RIDOS OS
+Description=RIDOS OS Boot Splash
+ModuleName=script
 
-          [script]
-          ImageDir=/usr/share/plymouth/themes/ridos
-          ScriptFile=/usr/share/plymouth/themes/ridos/ridos.script
-          EOF
+[script]
+ImageDir=/usr/share/plymouth/themes/ridos
+ScriptFile=/usr/share/plymouth/themes/ridos/ridos.script
+EOF
 
-          sudo tee chroot/usr/share/plymouth/themes/ridos/ridos.script << 'EOF'
-          Window.SetBackgroundTopColor(0.42, 0.13, 0.66);
-          Window.SetBackgroundBottomColor(0.12, 0.07, 0.27);
-          message_sprite = Sprite();
-          message_sprite.SetPosition(Window.GetWidth()/2 - 150, Window.GetHeight()/2 - 20, 10000);
-          fun refresh_callback() {
-            message_image = Image.Text("RIDOS OS v1.1.0 Baghdad", 1.0, 1.0, 1.0);
-            message_sprite.SetImage(message_image);
-          }
-          Plymouth.SetRefreshFunction(refresh_callback);
-          EOF
+          sudo tee chroot/usr/share/plymouth/themes/ridos/ridos.script > /dev/null << 'EOF'
+Window.SetBackgroundTopColor(0.42, 0.13, 0.66);
+Window.SetBackgroundBottomColor(0.12, 0.07, 0.27);
+message_sprite = Sprite();
+message_sprite.SetPosition(Window.GetWidth()/2 - 150, Window.GetHeight()/2 - 20, 10000);
+fun refresh_callback() {
+  message_image = Image.Text("RIDOS OS v1.1.0 Baghdad", 1.0, 1.0, 1.0);
+  message_sprite.SetImage(message_image);
+}
+Plymouth.SetRefreshFunction(refresh_callback);
+EOF
 
           sudo chroot chroot chown -R ridos:ridos /home/ridos
-          echo "Branding applied"
+          echo "✅ Branding applied"
 
-      - name: Install RIDOS core files and installer
+      - name: Install RIDOS core files
         run: |
           sudo mkdir -p chroot/opt/ridos/bin
           sudo mkdir -p chroot/usr/share/ridos
+
+          # Copy Python AI modules
           sudo cp ridos-core/*.py chroot/opt/ridos/bin/
           sudo cp build-system/scripts/ai_features.py chroot/opt/ridos/bin/ 2>/dev/null || true
+          sudo cp build-system/scripts/dashboard_server.py chroot/opt/ridos/bin/ 2>/dev/null || true
+          sudo cp build-system/scripts/ridos-dashboard.html chroot/opt/ridos/bin/ 2>/dev/null || true
           sudo chmod +x chroot/opt/ridos/bin/*.py
+
+          # Copy legal files
           sudo cp legal/LICENSE.txt legal/COPYRIGHT legal/CONTRIBUTORS.md \
                chroot/usr/share/ridos/
 
-          # RIDOS HDD Installer script
-          sudo tee chroot/opt/ridos/bin/ridos-install.sh << 'INSTALLEOF'
-          #!/bin/bash
-          # RIDOS OS HDD Installer
+          # Generate RIDOS wallpaper
+          sudo cp build-system/scripts/ridos-wallpaper.png \
+               chroot/usr/share/ridos/ridos-wallpaper.png 2>/dev/null || \
+          convert -size 1920x1080 \
+            gradient:"#0F0A1E-#2D1B69" \
+            -fill "rgba(196,181,253,0.15)" \
+            -font DejaVu-Sans-Bold \
+            -pointsize 80 \
+            -gravity center \
+            -annotate 0 "RIDOS OS" \
+            chroot/usr/share/ridos/ridos-wallpaper.png 2>/dev/null || true
 
-          clear
-          echo "============================================"
-          echo "   RIDOS OS v1.1.0 Baghdad - HDD Installer"
-          echo "============================================"
-          echo ""
-          echo "WARNING: This will ERASE all data on the selected disk!"
-          echo ""
+          # Generate RIDOS icon
+          convert -size 256x256 \
+            gradient:"#6B21A8-#1E1B4B" \
+            -font DejaVu-Sans-Bold \
+            -pointsize 48 \
+            -fill white \
+            -gravity center \
+            -annotate 0 "RIDOS" \
+            chroot/usr/share/ridos/ridos-icon.png 2>/dev/null || true
 
-          # List available disks
-          echo "Available disks:"
-          lsblk -d -o NAME,SIZE,MODEL | grep -v loop
-          echo ""
+          # Dashboard systemd service
+          sudo tee chroot/etc/systemd/system/ridos-dashboard.service > /dev/null << 'EOF'
+[Unit]
+Description=RIDOS Dashboard Stats Server
+After=network.target
 
-          read -p "Enter disk to install to (e.g. sda, sdb): " DISK
-          DISK="/dev/$DISK"
+[Service]
+Type=simple
+User=ridos
+ExecStart=/usr/bin/python3 /opt/ridos/bin/dashboard_server.py
+Restart=always
+RestartSec=3
 
-          if [ ! -b "$DISK" ]; then
-            echo "ERROR: Disk $DISK not found!"
-            read -p "Press Enter to exit..."
-            exit 1
-          fi
+[Install]
+WantedBy=multi-user.target
+EOF
 
-          echo ""
-          echo "You selected: $DISK"
-          lsblk "$DISK"
-          echo ""
-          read -p "ARE YOU SURE? All data on $DISK will be ERASED! Type YES to continue: " CONFIRM
-
-          if [ "$CONFIRM" != "YES" ]; then
-            echo "Installation cancelled."
-            read -p "Press Enter to exit..."
-            exit 0
-          fi
-
-          echo ""
-          echo "Starting installation..."
-
-          # Partition the disk
-          echo "Partitioning disk..."
-          parted -s "$DISK" mklabel msdos
-          parted -s "$DISK" mkpart primary ext4 1MiB 100%
-          parted -s "$DISK" set 1 boot on
-
-          PARTITION="${DISK}1"
-          sleep 2
-
-          # Format partition
-          echo "Formatting partition..."
-          mkfs.ext4 -F "$PARTITION"
-
-          # Mount partition
-          echo "Mounting partition..."
-          mkdir -p /mnt/ridos-install
-          mount "$PARTITION" /mnt/ridos-install
-
-          # Copy system
-          echo "Copying RIDOS OS files (this may take 10-20 minutes)..."
-          rsync -ax --exclude=/proc --exclude=/sys --exclude=/dev \
-            --exclude=/run --exclude=/mnt --exclude=/media \
-            / /mnt/ridos-install/
-
-          # Create required dirs
-          mkdir -p /mnt/ridos-install/{proc,sys,dev,run,mnt,media}
-
-          # Install GRUB bootloader
-          echo "Installing GRUB bootloader..."
-          mount --bind /dev /mnt/ridos-install/dev
-          mount --bind /proc /mnt/ridos-install/proc
-          mount --bind /sys /mnt/ridos-install/sys
-
-          # Update fstab
-          UUID=$(blkid -s UUID -o value "$PARTITION")
-          echo "UUID=$UUID / ext4 errors=remount-ro 0 1" > /mnt/ridos-install/etc/fstab
-
-          # Remove live-boot from installed system
-          chroot /mnt/ridos-install apt-get remove -y live-boot live-boot-initramfs-tools 2>/dev/null || true
-          chroot /mnt/ridos-install update-initramfs -u 2>/dev/null || true
-          chroot /mnt/ridos-install grub-install "$DISK"
-          chroot /mnt/ridos-install update-grub
-
-          # Update GRUB config for installed system
-          sed -i 's/boot=live //' /mnt/ridos-install/boot/grub/grub.cfg 2>/dev/null || true
-
-          umount /mnt/ridos-install/sys
-          umount /mnt/ridos-install/proc
-          umount /mnt/ridos-install/dev
-          umount /mnt/ridos-install
-
-          echo ""
-          echo "============================================"
-          echo "  RIDOS OS installed successfully!"
-          echo "  Remove the USB/DVD and reboot."
-          echo "============================================"
-          read -p "Press Enter to exit..."
-          INSTALLEOF
-
+          # RIDOS HDD bash installer (fallback if Calamares not available)
+          sudo tee chroot/opt/ridos/bin/ridos-install.sh > /dev/null << 'INSTALLEOF'
+#!/bin/bash
+clear
+echo "============================================"
+echo "   RIDOS OS v1.1.0 Baghdad - HDD Installer"
+echo "   Use 'Install RIDOS OS' desktop icon for"
+echo "   the graphical Calamares installer"
+echo "============================================"
+echo ""
+echo "Available disks:"
+lsblk -d -o NAME,SIZE,MODEL | grep -v loop
+echo ""
+read -p "Enter disk to install to (e.g. sda, sdb): " DISK
+DISK="/dev/$DISK"
+if [ ! -b "$DISK" ]; then
+  echo "ERROR: Disk $DISK not found!"
+  read -p "Press Enter to exit..."; exit 1
+fi
+echo ""; echo "You selected: $DISK"; lsblk "$DISK"; echo ""
+read -p "ARE YOU SURE? All data will be ERASED! Type YES: " CONFIRM
+if [ "$CONFIRM" != "YES" ]; then
+  echo "Cancelled."; read -p "Press Enter..."; exit 0
+fi
+echo "Partitioning..."
+parted -s "$DISK" mklabel msdos
+parted -s "$DISK" mkpart primary ext4 1MiB 100%
+parted -s "$DISK" set 1 boot on
+PARTITION="${DISK}1"; sleep 2
+echo "Formatting..."
+mkfs.ext4 -F "$PARTITION"
+mkdir -p /mnt/ridos-install
+mount "$PARTITION" /mnt/ridos-install
+echo "Copying files (10-20 minutes)..."
+rsync -ax --exclude=/proc --exclude=/sys --exclude=/dev \
+  --exclude=/run --exclude=/mnt --exclude=/media \
+  / /mnt/ridos-install/
+mkdir -p /mnt/ridos-install/{proc,sys,dev,run,mnt,media}
+echo "Installing GRUB..."
+mount --bind /dev  /mnt/ridos-install/dev
+mount --bind /proc /mnt/ridos-install/proc
+mount --bind /sys  /mnt/ridos-install/sys
+UUID=$(blkid -s UUID -o value "$PARTITION")
+echo "UUID=$UUID / ext4 errors=remount-ro 0 1" > /mnt/ridos-install/etc/fstab
+chroot /mnt/ridos-install apt-get remove -y live-boot live-boot-initramfs-tools 2>/dev/null || true
+chroot /mnt/ridos-install update-initramfs -u 2>/dev/null || true
+chroot /mnt/ridos-install grub-install "$DISK"
+chroot /mnt/ridos-install update-grub
+sed -i 's/boot=live //' /mnt/ridos-install/boot/grub/grub.cfg 2>/dev/null || true
+umount /mnt/ridos-install/sys /mnt/ridos-install/proc /mnt/ridos-install/dev
+umount /mnt/ridos-install
+echo ""
+echo "============================================"
+echo "  RIDOS OS installed! Remove USB and reboot."
+echo "============================================"
+read -p "Press Enter to exit..."
+INSTALLEOF
           sudo chmod +x chroot/opt/ridos/bin/ridos-install.sh
 
-          # RIDOS welcome banner
-          sudo tee chroot/etc/motd << 'EOF'
+          # RIDOS welcome banner (MOTD)
+          sudo tee chroot/etc/motd > /dev/null << 'EOF'
 
-            ██████╗ ██╗██████╗  ██████╗ ███████╗
-            ██╔══██╗██║██╔══██╗██╔═══██╗██╔════╝
-            ██████╔╝██║██║  ██║██║   ██║███████╗
-            ██╔══██╗██║██║  ██║██║   ██║╚════██║
-            ██║  ██║██║██████╔╝╚██████╔╝███████║
-            ╚═╝  ╚═╝╚═╝╚═════╝  ╚═════╝ ╚══════╝
+  ██████╗ ██╗██████╗  ██████╗ ███████╗
+  ██╔══██╗██║██╔══██╗██╔═══██╗██╔════╝
+  ██████╔╝██║██║  ██║██║   ██║███████╗
+  ██╔══██╗██║██║  ██║██║   ██║╚════██║
+  ██║  ██║██║██████╔╝╚██████╔╝███████║
+  ╚═╝  ╚═╝╚═╝╚═════╝  ╚═════╝ ╚══════╝
 
-            RIDOS OS v1.1.0 "Baghdad"
-            AI-Powered Linux for IT Professionals
-            Username: ridos  |  Password: ridos
-            AI Shell: python3 /opt/ridos/bin/ridos_shell.py
-            Install:  sudo /opt/ridos/bin/ridos-install.sh
+  RIDOS OS v1.1.0 "Baghdad"
+  AI-Powered Linux for IT Professionals
+  Username: ridos  |  Password: ridos
+  AI Shell: python3 /opt/ridos/bin/ridos_shell.py
 
-          EOF
+EOF
 
-          # Autostart welcome terminal
+          # Autostart welcome terminal with neofetch
           sudo mkdir -p chroot/home/ridos/.config/autostart
-          sudo tee chroot/home/ridos/.config/autostart/ridos-welcome.desktop << 'EOF'
-          [Desktop Entry]
-          Type=Application
-          Name=RIDOS Welcome
-          Exec=xfce4-terminal --title="RIDOS OS v1.1.0 Baghdad" -e "bash -c 'neofetch; echo; echo \"  Welcome to RIDOS OS v1.1.0 Baghdad\"; echo \"  AI Shell: python3 /opt/ridos/bin/ridos_shell.py\"; echo \"  Install:  sudo /opt/ridos/bin/ridos-install.sh\"; echo; bash'"
-          Hidden=false
-          NoDisplay=false
-          X-GNOME-Autostart-enabled=true
-          EOF
+          sudo tee chroot/home/ridos/.config/autostart/ridos-welcome.desktop > /dev/null << 'EOF'
+[Desktop Entry]
+Type=Application
+Name=RIDOS Welcome
+Exec=xfce4-terminal --title="RIDOS OS v1.1.0 Baghdad" -e "bash -c 'cat /etc/motd; echo; bash'"
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+EOF
 
           # Neofetch config
           sudo mkdir -p chroot/home/ridos/.config/neofetch
-          sudo tee chroot/home/ridos/.config/neofetch/config.conf << 'EOF'
-          print_info() {
-              info title
-              info "OS" distro
-              info "Host" model
-              info "Kernel" kernel
-              info "Uptime" uptime
-              info "Shell" shell
-              info "DE" de
-              info "CPU" cpu
-              info "Memory" memory
-          }
-          ascii_distro="auto"
-          EOF
+          sudo tee chroot/home/ridos/.config/neofetch/config.conf > /dev/null << 'EOF'
+print_info() {
+    info title
+    info "OS" distro
+    info "Host" model
+    info "Kernel" kernel
+    info "Uptime" uptime
+    info "Shell" shell
+    info "DE" de
+    info "CPU" cpu
+    info "Memory" memory
+}
+ascii_distro="auto"
+EOF
 
           sudo chroot chroot chown -R ridos:ridos /home/ridos
-          echo "RIDOS files installed"
+          echo "✅ RIDOS core files installed"
+          echo "Files in /opt/ridos/bin:"
+          ls -la chroot/opt/ridos/bin/
 
-      - name: Build squashfs
+      - name: Build squashfs filesystem
         run: |
           sudo mksquashfs chroot filesystem.squashfs \
             -comp xz -e boot -noappend
-          echo "squashfs: $(du -sh filesystem.squashfs)"
+          echo "✅ squashfs: $(du -sh filesystem.squashfs)"
 
       - name: Prepare ISO structure
         run: |
           mkdir -p iso/live iso/boot/grub
           cp filesystem.squashfs iso/live/
+
           KERNEL=$(ls chroot/boot/vmlinuz-* 2>/dev/null | sort -V | tail -1)
           INITRD=$(ls chroot/boot/initrd.img-* 2>/dev/null | sort -V | tail -1)
-          echo "Kernel: $KERNEL  Initrd: $INITRD"
+          echo "Kernel: $KERNEL"
+          echo "Initrd: $INITRD"
           cp "$KERNEL" iso/live/vmlinuz
           cp "$INITRD" iso/live/initrd
+
           cat > iso/boot/grub/grub.cfg << 'GRUBEOF'
-          set default=0
-          set timeout=5
+set default=0
+set timeout=5
 
-          menuentry "RIDOS OS v1.1.0 Baghdad" {
-            linux /live/vmlinuz boot=live quiet splash
-            initrd /live/initrd
-          }
-          menuentry "RIDOS OS (safe mode)" {
-            linux /live/vmlinuz boot=live nomodeset
-            initrd /live/initrd
-          }
-          menuentry "RIDOS OS (debug)" {
-            linux /live/vmlinuz boot=live
-            initrd /live/initrd
-          }
-          GRUBEOF
-          echo "ISO structure ready"
+menuentry "RIDOS OS v1.1.0 Baghdad" {
+  linux /live/vmlinuz boot=live quiet splash
+  initrd /live/initrd
+}
+menuentry "RIDOS OS (safe mode)" {
+  linux /live/vmlinuz boot=live nomodeset
+  initrd /live/initrd
+}
+menuentry "RIDOS OS (debug)" {
+  linux /live/vmlinuz boot=live
+  initrd /live/initrd
+}
+GRUBEOF
+          echo "✅ ISO structure ready"
+          find iso/ -type f | head -10
 
-      - name: Build GRUB and create ISO
+      - name: Build GRUB and create bootable ISO
         run: |
-          # ── Step 1: Build GRUB BIOS core image ──────────────────
-          # Use grub-mkimage to create a minimal BIOS boot image
-          grub-mkimage \
-            -O i386-pc \
-            -o bios.core.img \
-            -p "/boot/grub" \
-            iso9660 linux normal biosdisk search
-          # Prepend cdboot.img to make it El Torito bootable
+          # GRUB BIOS image
+          grub-mkimage -O i386-pc -o bios.core.img \
+            -p "/boot/grub" iso9660 linux normal biosdisk search
           cat /usr/lib/grub/i386-pc/cdboot.img bios.core.img > bios.img
-          echo "BIOS boot image: $(du -sh bios.img)"
+          echo "BIOS: $(du -sh bios.img)"
 
-          # ── Step 2: Build GRUB EFI image ─────────────────────────
-          grub-mkimage \
-            -O x86_64-efi \
-            -o bootx64.efi \
-            -p "/boot/grub" \
-            iso9660 linux normal search
-          echo "EFI boot image: $(du -sh bootx64.efi)"
+          # GRUB EFI image
+          grub-mkimage -O x86_64-efi -o bootx64.efi \
+            -p "/boot/grub" iso9660 linux normal search
+          echo "EFI: $(du -sh bootx64.efi)"
 
-          # ── Step 3: Create EFI system partition image ─────────────
-          # This is what makes Rufus ISO mode work properly
-          dd if=/dev/zero of=efi.img bs=1M count=10
+          # EFI partition image (10MB)
+          dd if=/dev/zero of=efi.img bs=1M count=10 status=none
           mkfs.vfat -F 12 efi.img
           mmd -i efi.img ::/EFI ::/EFI/boot
           mcopy -i efi.img bootx64.efi ::/EFI/boot/bootx64.efi
           echo "EFI partition: $(du -sh efi.img)"
 
-          # ── Step 4: Copy GRUB files into ISO tree ────────────────
+          # Copy GRUB modules into ISO
           mkdir -p iso/boot/grub/i386-pc
           cp /usr/lib/grub/i386-pc/*.mod iso/boot/grub/i386-pc/ 2>/dev/null || true
           cp /usr/lib/grub/i386-pc/*.lst iso/boot/grub/i386-pc/ 2>/dev/null || true
           cp bios.img iso/boot/grub/bios.img
 
-          # ── Step 5: Create fully compatible ISO with xorriso ─────
-          # This command creates an ISO that is:
-          # - Bootable in VirtualBox (BIOS + UEFI)
-          # - Compatible with Rufus ISO mode AND DD mode
-          # - Compatible with direct CD/DVD burning
-          # - Recognized by all major tools
+          # Create bootable ISO with xorriso
           xorriso -as mkisofs \
             -iso-level 3 \
             -full-iso9660-filenames \
@@ -858,32 +854,21 @@ jobs:
               "/boot/grub/bios.img=bios.img" \
               "/=iso"
 
-          # ── Step 6: Verify the ISO ───────────────────────────────
-          echo ""
-          echo "=== ISO Information ==="
+          # Verify ISO
+          echo "=== ISO Info ==="
           ls -lh ridos-os-1.1.0-Baghdad-x86_64.iso
           file ridos-os-1.1.0-Baghdad-x86_64.iso
-
-          echo ""
-          echo "=== Boot sector check (first 512 bytes) ==="
-          dd if=ridos-os-1.1.0-Baghdad-x86_64.iso bs=512 count=1 2>/dev/null | xxd | head -8
-
-          echo ""
-          echo "=== ISO partition table ==="
+          echo "=== Boot sector ==="
+          dd if=ridos-os-1.1.0-Baghdad-x86_64.iso bs=512 count=1 2>/dev/null | xxd | head -4
+          echo "=== Partition table ==="
           fdisk -l ridos-os-1.1.0-Baghdad-x86_64.iso 2>/dev/null || true
 
-          echo ""
-          echo "=== El Torito boot catalog ==="
-          xorriso -indev ridos-os-1.1.0-Baghdad-x86_64.iso \
-            -report_el_torito as_mkisofs 2>/dev/null || true
-
-          # ── Step 7: Generate checksums ───────────────────────────
-          md5sum ridos-os-1.1.0-Baghdad-x86_64.iso > ridos-os-1.1.0-Baghdad-x86_64.iso.md5
+          # Checksums
+          md5sum    ridos-os-1.1.0-Baghdad-x86_64.iso > ridos-os-1.1.0-Baghdad-x86_64.iso.md5
           sha256sum ridos-os-1.1.0-Baghdad-x86_64.iso > ridos-os-1.1.0-Baghdad-x86_64.iso.sha256
-          echo ""
-          echo "✅ ISO ready! Bootable in VirtualBox, Rufus ISO mode, Rufus DD mode"
+          echo "✅ ISO ready! Bootable in VirtualBox + Rufus DD mode"
 
-      - name: Upload ISO
+      - name: Upload ISO artifact
         uses: actions/upload-artifact@v4
         with:
           name: RIDOS-OS-1.1.0-Baghdad
@@ -899,22 +884,25 @@ jobs:
           gh release create "${{ github.ref_name }}" \
             ridos-os-1.1.0-Baghdad-x86_64.iso \
             ridos-os-1.1.0-Baghdad-x86_64.iso.md5 \
+            ridos-os-1.1.0-Baghdad-x86_64.iso.sha256 \
             --title "RIDOS OS ${{ github.ref_name }} Baghdad" \
             --notes "## RIDOS OS v1.1.0 Baghdad
-          AI-Powered Linux for IT Professionals
+AI-Powered Linux for IT Professionals
 
-          ### Included:
-          - XFCE desktop with dark purple theme
-          - Firefox ESR browser
-          - RIDOS AI Shell (Claude AI powered)
-          - HDD Installer included
-          - Full hardware driver support
-          - Network tools: nmap, traceroute, net-tools
-          - Development: Python3, Git, Vim
+### Included:
+- XFCE desktop with dark purple theme + RIDOS wallpaper
+- Calamares graphical installer with RIDOS branding
+- Firefox ESR browser
+- RIDOS AI Shell + AI Tools (Network, Hardware, Security, System Doctor)
+- RIDOS Dashboard (live system stats)
+- VirtualBox Guest Additions (clipboard sharing)
+- Full hardware driver support (Intel/AMD/Realtek/Atheros)
+- Network tools: nmap, tshark, iftop, traceroute
+- Development: Python3, Git, Vim, smartmontools
 
-          ### Login:
-          - Username: ridos  |  Password: ridos
+### Login:
+- Username: ridos  |  Password: ridos
 
-          Built on Debian bookworm | GPL v3"
+Built on Debian bookworm | GPL v3"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

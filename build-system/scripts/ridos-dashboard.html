@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RIDOS OS Dashboard</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: 'Noto Sans', Arial, sans-serif;
+  background: linear-gradient(135deg, #0F0A1E 0%, #1E1B4B 50%, #2D1B69 100%);
+  color: #E9D5FF;
+  min-height: 100vh;
+  padding: 20px;
+}
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 15px 25px;
+  background: rgba(107,33,168,0.3);
+  border: 1px solid rgba(167,139,250,0.3);
+  border-radius: 12px;
+  margin-bottom: 20px;
+}
+.logo { font-size: 28px; font-weight: bold; color: #C4B5FD; }
+.logo span { color: #7C3AED; }
+.version { font-size: 13px; color: #A78BFA; }
+.time { font-size: 20px; color: #DDD6FE; text-align: right; }
+.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px; }
+.card {
+  background: rgba(109,40,217,0.2);
+  border: 1px solid rgba(167,139,250,0.25);
+  border-radius: 10px;
+  padding: 18px;
+  transition: all 0.3s;
+}
+.card:hover { background: rgba(109,40,217,0.35); border-color: rgba(167,139,250,0.5); transform: translateY(-2px); }
+.card-title { font-size: 12px; color: #A78BFA; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+.card-value { font-size: 28px; font-weight: bold; color: #C4B5FD; }
+.card-sub { font-size: 12px; color: #7C3AED; margin-top: 4px; }
+.progress { height: 6px; background: rgba(107,33,168,0.3); border-radius: 3px; margin-top: 8px; overflow: hidden; }
+.progress-bar { height: 100%; border-radius: 3px; transition: width 1s; }
+.bar-good { background: linear-gradient(90deg, #059669, #10B981); }
+.bar-warn { background: linear-gradient(90deg, #D97706, #F59E0B); }
+.bar-crit { background: linear-gradient(90deg, #DC2626, #EF4444); }
+.tools-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+.tool-btn {
+  background: rgba(109,40,217,0.25);
+  border: 1px solid rgba(167,139,250,0.3);
+  border-radius: 10px;
+  padding: 16px;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.2s;
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+.tool-btn:hover { background: rgba(109,40,217,0.5); border-color: #7C3AED; transform: scale(1.02); }
+.tool-icon { font-size: 28px; margin-bottom: 8px; }
+.tool-name { font-size: 13px; font-weight: bold; color: #DDD6FE; }
+.tool-name-ar { font-size: 11px; color: #A78BFA; direction: rtl; }
+.status-bar {
+  display: flex;
+  gap: 10px;
+  padding: 12px 20px;
+  background: rgba(107,33,168,0.2);
+  border: 1px solid rgba(167,139,250,0.2);
+  border-radius: 10px;
+  font-size: 12px;
+}
+.status-item { display: flex; align-items: center; gap: 6px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; }
+.dot-green { background: #10B981; box-shadow: 0 0 6px #10B981; }
+.dot-yellow { background: #F59E0B; }
+.dot-red { background: #EF4444; }
+.section-title { font-size: 14px; font-weight: bold; color: #A78BFA; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="logo">RIDOS <span>OS</span></div>
+    <div class="version">v1.1.0 "Baghdad" — AI-Powered Linux</div>
+  </div>
+  <div class="time" id="clock">--:--:--</div>
+</div>
+
+<div class="section-title">📊 System Status | حالة النظام</div>
+<div class="grid" id="stats">
+  <div class="card">
+    <div class="card-title">CPU Usage | المعالج</div>
+    <div class="card-value" id="cpu-val">--</div>
+    <div class="card-sub" id="cpu-sub">Loading...</div>
+    <div class="progress"><div class="progress-bar bar-good" id="cpu-bar" style="width:0%"></div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">RAM Memory | الذاكرة</div>
+    <div class="card-value" id="ram-val">--</div>
+    <div class="card-sub" id="ram-sub">Loading...</div>
+    <div class="progress"><div class="progress-bar bar-good" id="ram-bar" style="width:0%"></div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Disk Space | القرص</div>
+    <div class="card-value" id="disk-val">--</div>
+    <div class="card-sub" id="disk-sub">Loading...</div>
+    <div class="progress"><div class="progress-bar bar-good" id="disk-bar" style="width:0%"></div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Network | الشبكة</div>
+    <div class="card-value" id="net-val">--</div>
+    <div class="card-sub" id="net-sub">Checking...</div>
+    <div class="progress"><div class="progress-bar bar-good" id="net-bar" style="width:0%"></div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Uptime | وقت التشغيل</div>
+    <div class="card-value" id="uptime-val">--</div>
+    <div class="card-sub">Since last boot | منذ آخر إقلاع</div>
+  </div>
+  <div class="card">
+    <div class="card-title">AI Status | حالة الذكاء الاصطناعي</div>
+    <div class="card-value" id="ai-val">--</div>
+    <div class="card-sub" id="ai-sub">Checking API key...</div>
+  </div>
+</div>
+
+<div class="section-title">🛠️ AI Tools | أدوات الذكاء الاصطناعي</div>
+<div class="tools-grid">
+  <a class="tool-btn" onclick="launch('ridos_shell')">
+    <div class="tool-icon">🤖</div>
+    <div class="tool-name">RIDOS AI Shell</div>
+    <div class="tool-name-ar">المساعد الذكي الرئيسي</div>
+  </a>
+  <a class="tool-btn" onclick="launch('system_doctor')">
+    <div class="tool-icon">🏥</div>
+    <div class="tool-name">AI System Doctor</div>
+    <div class="tool-name-ar">طبيب النظام الذكي</div>
+  </a>
+  <a class="tool-btn" onclick="launch('network')">
+    <div class="tool-icon">🌐</div>
+    <div class="tool-name">AI Network Analyzer</div>
+    <div class="tool-name-ar">محلل الشبكة المتقدم</div>
+  </a>
+  <a class="tool-btn" onclick="launch('hardware')">
+    <div class="tool-icon">🔧</div>
+    <div class="tool-name">AI Hardware Fixer</div>
+    <div class="tool-name-ar">إصلاح العتاد الذكي</div>
+  </a>
+  <a class="tool-btn" onclick="launch('security')">
+    <div class="tool-icon">🔒</div>
+    <div class="tool-name">AI Security Scanner</div>
+    <div class="tool-name-ar">الماسح الأمني الذكي</div>
+  </a>
+  <a class="tool-btn" onclick="launch('install')">
+    <div class="tool-icon">💽</div>
+    <div class="tool-name">Install RIDOS OS</div>
+    <div class="tool-name-ar">تثبيت ريدوس على القرص</div>
+  </a>
+</div>
+
+<div class="status-bar">
+  <div class="status-item"><div class="dot dot-green"></div> RIDOS OS v1.1.0 Baghdad</div>
+  <div class="status-item"><div class="dot" id="inet-dot" style="background:#F59E0B"></div> <span id="inet-status">Internet: Checking...</span></div>
+  <div class="status-item"><div class="dot dot-green"></div> Debian Bookworm Base</div>
+  <div class="status-item"><div class="dot dot-green"></div> GPL v3 Free & Open Source</div>
+  <div style="margin-left:auto; color:#7C3AED;">github.com/alexeaiskinder-mea/ridos-os</div>
+</div>
+
+<script>
+// Clock
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent = 
+    now.toLocaleTimeString('en-GB') + '\n' + now.toLocaleDateString('en-GB');
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// System stats via fetch from local Python server
+async function updateStats() {
+  try {
+    const r = await fetch('http://localhost:9999/stats', {signal: AbortSignal.timeout(2000)});
+    const d = await r.json();
+    
+    // CPU
+    const cpu = d.cpu || 0;
+    document.getElementById('cpu-val').textContent = cpu + '%';
+    document.getElementById('cpu-sub').textContent = (d.cpu_cores||'?') + ' cores';
+    const cpuBar = document.getElementById('cpu-bar');
+    cpuBar.style.width = cpu + '%';
+    cpuBar.className = 'progress-bar ' + (cpu>80?'bar-crit':cpu>60?'bar-warn':'bar-good');
+    
+    // RAM
+    const ram = d.ram_percent || 0;
+    document.getElementById('ram-val').textContent = ram + '%';
+    document.getElementById('ram-sub').textContent = (d.ram_used||'?') + ' / ' + (d.ram_total||'?') + ' GB';
+    const ramBar = document.getElementById('ram-bar');
+    ramBar.style.width = ram + '%';
+    ramBar.className = 'progress-bar ' + (ram>85?'bar-crit':ram>70?'bar-warn':'bar-good');
+    
+    // Disk
+    const disk = d.disk_percent || 0;
+    document.getElementById('disk-val').textContent = disk + '%';
+    document.getElementById('disk-sub').textContent = (d.disk_used||'?') + ' / ' + (d.disk_total||'?') + ' GB';
+    const diskBar = document.getElementById('disk-bar');
+    diskBar.style.width = disk + '%';
+    diskBar.className = 'progress-bar ' + (disk>85?'bar-crit':disk>70?'bar-warn':'bar-good');
+    
+    // Network
+    document.getElementById('net-val').textContent = d.net_ip || 'N/A';
+    document.getElementById('net-sub').textContent = d.net_iface || '';
+    
+    // Uptime
+    document.getElementById('uptime-val').textContent = d.uptime || '--';
+    
+    // AI
+    document.getElementById('ai-val').textContent = d.ai_ready ? '✅ Ready' : '⚠️ No Key';
+    document.getElementById('ai-sub').textContent = d.ai_ready ? 'API key configured' : 'Set key at /etc/ridos/api.key';
+    
+    // Internet
+    const inet = d.internet;
+    document.getElementById('inet-dot').style.background = inet ? '#10B981' : '#EF4444';
+    document.getElementById('inet-status').textContent = 'Internet: ' + (inet ? 'Connected' : 'Offline');
+    
+  } catch(e) {
+    // Stats server not running — show static values
+    document.getElementById('cpu-val').textContent = 'N/A';
+    document.getElementById('ram-val').textContent = 'N/A';
+    document.getElementById('disk-val').textContent = 'N/A';
+    document.getElementById('net-val').textContent = 'N/A';
+    document.getElementById('uptime-val').textContent = 'N/A';
+    document.getElementById('ai-val').textContent = '?';
+    document.getElementById('ai-sub').textContent = 'Start: python3 /opt/ridos/bin/dashboard_server.py';
+  }
+}
+setInterval(updateStats, 3000);
+updateStats();
+
+// Launch tools
+function launch(tool) {
+  const cmds = {
+    'ridos_shell': 'xfce4-terminal -e "python3 /opt/ridos/bin/ridos_shell.py"',
+    'system_doctor': 'xfce4-terminal -e "bash -c \'python3 /opt/ridos/bin/ai_features.py 2; read\'"',
+    'network': 'xfce4-terminal -e "bash -c \'python3 /opt/ridos/bin/ai_features.py 3; read\'"',
+    'hardware': 'xfce4-terminal -e "bash -c \'python3 /opt/ridos/bin/ai_features.py 4; read\'"',
+    'security': 'xfce4-terminal -e "bash -c \'python3 /opt/ridos/bin/ai_features.py 5; read\'"',
+    'install': 'xfce4-terminal -e "sudo /opt/ridos/bin/ridos-install.sh"',
+  };
+  alert('Launch: ' + tool + '\nCommand: ' + (cmds[tool]||''));
+}
+</script>
+</body>
+</html>
