@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Apply RIDOS OS branding, theme, and desktop shortcuts"""
-import os, subprocess
+import os, subprocess, glob
 
 def write(path, content):
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -10,15 +10,18 @@ def write(path, content):
 def run(cmd):
     return subprocess.run(cmd, shell=True)
 
-# XFCE config dirs
-os.makedirs('chroot/home/ridos/.config/xfce4/xfconf/xfce-perchannel-xml', exist_ok=True)
-os.makedirs('chroot/home/ridos/.config/xfce4/terminal', exist_ok=True)
-os.makedirs('chroot/home/ridos/Desktop', exist_ok=True)
-os.makedirs('chroot/home/ridos/.config/autostart', exist_ok=True)
-os.makedirs('chroot/home/ridos/.config/neofetch', exist_ok=True)
-os.makedirs('chroot/usr/share/plymouth/themes/ridos', exist_ok=True)
+# ── XFCE config dirs ──────────────────────────────────────────
+for d in [
+    'chroot/home/ridos/.config/xfce4/xfconf/xfce-perchannel-xml',
+    'chroot/home/ridos/.config/xfce4/terminal',
+    'chroot/home/ridos/Desktop',
+    'chroot/home/ridos/.config/autostart',
+    'chroot/home/ridos/.config/neofetch',
+    'chroot/usr/share/plymouth/themes/ridos',
+]:
+    os.makedirs(d, exist_ok=True)
 
-# Dark theme
+# ── Dark purple XFCE theme ────────────────────────────────────
 write('chroot/home/ridos/.config/xfce4/xfconf/xfce-perchannel-xml/xsettings.xml', '''<?xml version="1.0" encoding="UTF-8"?>
 <channel name="xsettings" version="1.0">
   <property name="Net" type="empty">
@@ -33,7 +36,7 @@ write('chroot/home/ridos/.config/xfce4/xfconf/xfce-perchannel-xml/xsettings.xml'
 </channel>
 ''')
 
-# Wallpaper
+# ── Wallpaper config - cover ALL monitor names ────────────────
 write('chroot/home/ridos/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml', '''<?xml version="1.0" encoding="UTF-8"?>
 <channel name="xfce4-desktop" version="1.0">
   <property name="backdrop" type="empty">
@@ -45,12 +48,33 @@ write('chroot/home/ridos/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.
           <property name="last-image" type="string" value="/usr/share/ridos/ridos-wallpaper.png"/>
         </property>
       </property>
+      <property name="monitor0" type="empty">
+        <property name="workspace0" type="empty">
+          <property name="color-style" type="int" value="0"/>
+          <property name="image-style" type="int" value="5"/>
+          <property name="last-image" type="string" value="/usr/share/ridos/ridos-wallpaper.png"/>
+        </property>
+      </property>
+      <property name="monitorVGA-1" type="empty">
+        <property name="workspace0" type="empty">
+          <property name="color-style" type="int" value="0"/>
+          <property name="image-style" type="int" value="5"/>
+          <property name="last-image" type="string" value="/usr/share/ridos/ridos-wallpaper.png"/>
+        </property>
+      </property>
+      <property name="monitorHDMI-1" type="empty">
+        <property name="workspace0" type="empty">
+          <property name="color-style" type="int" value="0"/>
+          <property name="image-style" type="int" value="5"/>
+          <property name="last-image" type="string" value="/usr/share/ridos/ridos-wallpaper.png"/>
+        </property>
+      </property>
     </property>
   </property>
 </channel>
 ''')
 
-# Window manager
+# ── Window manager ────────────────────────────────────────────
 write('chroot/home/ridos/.config/xfce4/xfconf/xfce-perchannel-xml/xfwm4.xml', '''<?xml version="1.0" encoding="UTF-8"?>
 <channel name="xfwm4" version="1.0">
   <property name="general" type="empty">
@@ -60,7 +84,7 @@ write('chroot/home/ridos/.config/xfce4/xfconf/xfce-perchannel-xml/xfwm4.xml', ''
 </channel>
 ''')
 
-# Terminal colors
+# ── Terminal purple theme ─────────────────────────────────────
 write('chroot/home/ridos/.config/xfce4/terminal/terminalrc',
     '[Configuration]\n'
     'ColorForeground=#E9D5FF\n'
@@ -68,46 +92,114 @@ write('chroot/home/ridos/.config/xfce4/terminal/terminalrc',
     'ColorCursor=#7C3AED\n'
     'FontName=Noto Mono 11\n')
 
-# XFCE helpers
-write('chroot/home/ridos/.config/xfce4/helpers.rc', 'TerminalEmulator=xfce4-terminal\n')
+# ── XFCE helpers ──────────────────────────────────────────────
+write('chroot/home/ridos/.config/xfce4/helpers.rc',
+    'TerminalEmulator=xfce4-terminal\n')
 
-# Desktop shortcuts
-desktops = {
-    '01-ridos-dashboard.desktop': (
-        '[Desktop Entry]\nVersion=1.0\nType=Application\n'
-        'Name=RIDOS Dashboard\nComment=RIDOS OS Control Center\n'
-        'Exec=firefox-esr /opt/ridos/bin/ridos-dashboard.html\n'
-        'Icon=/usr/share/ridos/ridos-icon.png\nTerminal=false\nCategories=System;\n'),
-    '02-ridos-ai-tools.desktop': (
-        '[Desktop Entry]\nVersion=1.0\nType=Application\n'
-        'Name=RIDOS AI Tools\nComment=AI Shell, Network, Hardware, Security\n'
-        'Exec=xfce4-terminal --title="RIDOS AI Tools" -e "python3 /opt/ridos/bin/ai_features.py"\n'
-        'Icon=utilities-system-monitor\nTerminal=false\nCategories=System;Network;\n'),
-    '03-firefox.desktop': (
-        '[Desktop Entry]\nVersion=1.0\nType=Application\n'
-        'Name=Firefox Browser\nExec=firefox-esr %u\n'
-        'Icon=firefox-esr\nTerminal=false\nCategories=Network;WebBrowser;\n'),
-    '04-files.desktop': (
-        '[Desktop Entry]\nVersion=1.0\nType=Application\n'
-        'Name=File Manager\nExec=thunar\n'
-        'Icon=system-file-manager\nTerminal=false\nCategories=System;FileManager;\n'),
-    '05-terminal.desktop': (
-        '[Desktop Entry]\nVersion=1.0\nType=Application\n'
-        'Name=Terminal\nExec=xfce4-terminal\n'
-        'Icon=utilities-terminal\nTerminal=false\nCategories=System;\n'),
-    '06-install-ridos.desktop': (
-        '[Desktop Entry]\nVersion=1.0\nType=Application\n'
-        'Name=Install RIDOS OS\nComment=Install RIDOS OS to hard drive\n'
-        'Exec=bash -c "if [ -f /usr/bin/calamares ]; then pkexec /usr/bin/calamares; '
-        'else xfce4-terminal --title=\'RIDOS Installer\' -e \'sudo /opt/ridos/bin/ridos-install.sh\'; fi"\n'
-        'Icon=drive-harddisk\nTerminal=false\nCategories=System;\n'),
-}
+# ── CLEAN 5-ICON Desktop (Pro Team Recommendation) ───────────
+# Remove ALL existing desktop files first
+for f in glob.glob('chroot/home/ridos/Desktop/*.desktop'):
+    os.remove(f)
+    print(f"Removed: {os.path.basename(f)}")
 
-for name, content in desktops.items():
-    write(f'chroot/home/ridos/Desktop/{name}', content)
-    run(f'chmod +x chroot/home/ridos/Desktop/{name}')
+# Remove any system-added desktop files
+for f in [
+    'chroot/usr/share/applications/calamares.desktop',
+    'chroot/usr/share/applications/install-debian.desktop',
+]:
+    if os.path.exists(f):
+        os.remove(f)
 
-# Plymouth
+# 1. RIDOS Control Center (MAIN - replaces all tool icons)
+write('chroot/home/ridos/Desktop/01-control-center.desktop',
+    '[Desktop Entry]\n'
+    'Version=1.0\n'
+    'Type=Application\n'
+    'Name=RIDOS Control Center\n'
+    'Comment=AI-Powered System Management | مركز التحكم الذكي\n'
+    'Exec=python3 /opt/ridos/bin/control_center.py\n'
+    'Icon=/usr/share/ridos/ridos-icon.png\n'
+    'Terminal=false\n'
+    'Categories=System;\n')
+
+# 2. AI Terminal
+write('chroot/home/ridos/Desktop/02-ai-terminal.desktop',
+    '[Desktop Entry]\n'
+    'Version=1.0\n'
+    'Type=Application\n'
+    'Name=AI Terminal\n'
+    'Comment=Intelligent Command Assistant | الطرفية الذكية\n'
+    'Exec=xfce4-terminal --title="RIDOS AI Terminal" -e "python3 /opt/ridos/bin/ai_features.py 1"\n'
+    'Icon=utilities-terminal\n'
+    'Terminal=false\n'
+    'Categories=System;\n')
+
+# 3. Software Center
+write('chroot/home/ridos/Desktop/03-software-center.desktop',
+    '[Desktop Entry]\n'
+    'Version=1.0\n'
+    'Type=Application\n'
+    'Name=Software Center\n'
+    'Comment=Install and manage software | مركز البرمجيات\n'
+    'Exec=firefox-esr /opt/ridos/bin/ridos-dashboard.html\n'
+    'Icon=system-software-install\n'
+    'Terminal=false\n'
+    'Categories=System;PackageManager;\n')
+
+# 4. Install RIDOS OS (live session only)
+write('chroot/home/ridos/Desktop/04-install-ridos.desktop',
+    '[Desktop Entry]\n'
+    'Version=1.0\n'
+    'Type=Application\n'
+    'Name=Install RIDOS OS\n'
+    'Comment=Install to hard drive | تثبيت على القرص الصلب\n'
+    'Exec=bash -c "if [ -f /usr/bin/calamares ]; then pkexec /usr/bin/calamares; else xfce4-terminal --title=\'RIDOS Installer\' -e \'sudo /opt/ridos/bin/ridos-install.sh\'; fi"\n'
+    'Icon=drive-harddisk\n'
+    'Terminal=false\n'
+    'Categories=System;\n')
+
+# 5. File Manager
+write('chroot/home/ridos/Desktop/05-files.desktop',
+    '[Desktop Entry]\n'
+    'Version=1.0\n'
+    'Type=Application\n'
+    'Name=File System\n'
+    'Comment=Browse files and folders | تصفح الملفات\n'
+    'Exec=thunar\n'
+    'Icon=system-file-manager\n'
+    'Terminal=false\n'
+    'Categories=System;FileManager;\n')
+
+# Make all desktop files executable
+for f in glob.glob('chroot/home/ridos/Desktop/*.desktop'):
+    os.chmod(f, 0o755)
+    print(f"Created: {os.path.basename(f)}")
+
+# ── First Boot Experience (Pro Team Recommendation) ───────────
+# Replace neofetch terminal with clean welcome launcher
+write('chroot/home/ridos/.config/autostart/ridos-welcome.desktop',
+    '[Desktop Entry]\n'
+    'Type=Application\n'
+    'Name=RIDOS Welcome\n'
+    'Exec=python3 /opt/ridos/bin/control_center.py\n'
+    'Hidden=false\n'
+    'NoDisplay=false\n'
+    'X-GNOME-Autostart-enabled=true\n')
+
+# ── Neofetch config ───────────────────────────────────────────
+write('chroot/home/ridos/.config/neofetch/config.conf',
+    'print_info() {\n'
+    '    info title\n'
+    '    info "OS" distro\n'
+    '    info "Kernel" kernel\n'
+    '    info "Uptime" uptime\n'
+    '    info "DE" de\n'
+    '    info "CPU" cpu\n'
+    '    info "Memory" memory\n'
+    '}\n'
+    'ascii_distro="auto"\n')
+
+# ── Plymouth boot splash ──────────────────────────────────────
 write('chroot/usr/share/plymouth/themes/ridos/ridos.plymouth',
     '[Plymouth Theme]\n'
     'Name=RIDOS OS\n'
@@ -128,24 +220,5 @@ write('chroot/usr/share/plymouth/themes/ridos/ridos.script',
     '}\n'
     'Plymouth.SetRefreshFunction(refresh_callback);\n')
 
-# Autostart
-write('chroot/home/ridos/.config/autostart/ridos-welcome.desktop',
-    '[Desktop Entry]\nType=Application\nName=RIDOS Welcome\n'
-    'Exec=xfce4-terminal --title="RIDOS OS v1.1.0 Baghdad" -e "bash -c \'cat /etc/motd; echo; bash\'"\n'
-    'Hidden=false\nNoDisplay=false\nX-GNOME-Autostart-enabled=true\n')
-
-# Neofetch
-write('chroot/home/ridos/.config/neofetch/config.conf',
-    'print_info() {\n'
-    '    info title\n'
-    '    info "OS" distro\n'
-    '    info "Kernel" kernel\n'
-    '    info "Uptime" uptime\n'
-    '    info "DE" de\n'
-    '    info "CPU" cpu\n'
-    '    info "Memory" memory\n'
-    '}\n'
-    'ascii_distro="auto"\n')
-
 run('chroot chroot chown -R ridos:ridos /home/ridos')
-print("Branding applied successfully")
+print("✅ Branding applied - 5 clean desktop icons as per pro team recommendation")

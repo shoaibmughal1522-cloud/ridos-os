@@ -10,13 +10,26 @@ def write(path, content):
 def run(cmd):
     return subprocess.run(cmd, shell=True)
 
-# Generate wallpaper
-run('convert -size 1920x1080 gradient:"#0F0A1E-#2D1B69" '
-    '-fill "rgba(196,181,253,0.15)" -font DejaVu-Sans-Bold '
-    '-pointsize 80 -gravity center -annotate 0 "RIDOS OS" '
-    'chroot/usr/share/ridos/ridos-wallpaper.png 2>/dev/null || '
-    'cp build-system/scripts/ridos-wallpaper.png '
-    'chroot/usr/share/ridos/ridos-wallpaper.png 2>/dev/null || true')
+# Generate wallpaper - try repo file first, then generate
+import shutil
+wallpaper_dst = 'chroot/usr/share/ridos/ridos-wallpaper.png'
+wallpaper_src = 'build-system/scripts/ridos-wallpaper.png'
+
+if os.path.exists(wallpaper_src) and os.path.getsize(wallpaper_src) > 1000:
+    shutil.copy2(wallpaper_src, wallpaper_dst)
+    print(f"Wallpaper copied from repo: {os.path.getsize(wallpaper_dst)} bytes")
+else:
+    run('convert -size 1920x1080 gradient:"#0F0A1E-#2D1B69" '
+        '-fill "rgba(196,181,253,0.15)" -font DejaVu-Sans-Bold '
+        '-pointsize 80 -gravity center -annotate 0 "RIDOS OS" '
+        f'{wallpaper_dst} 2>/dev/null || true')
+    print("Wallpaper generated")
+
+# Verify wallpaper exists
+if os.path.exists(wallpaper_dst):
+    print(f"Wallpaper OK: {os.path.getsize(wallpaper_dst)} bytes")
+else:
+    print("WARNING: Wallpaper not created!")
 
 # Generate icon
 run('convert -size 256x256 gradient:"#6B21A8-#1E1B4B" '
@@ -107,4 +120,22 @@ read -p "Press Enter to exit..."
 ''')
 run('chmod +x chroot/opt/ridos/bin/ridos-install.sh')
 run('chroot chroot chown -R ridos:ridos /home/ridos 2>/dev/null || true')
+
+# Install unattended-upgrades (Pro Team Recommendation)
+run('chroot chroot apt-get install -y unattended-upgrades 2>/dev/null || true')
+
+# Create ridos-update script
+with open('chroot/usr/local/bin/ridos-update', 'w') as f:
+    f.write('''#!/bin/bash
+echo "================================"
+echo "  RIDOS OS System Update"
+echo "================================"
+sudo apt-get update
+sudo apt-get upgrade -y
+sudo apt-get autoremove -y
+echo "================================"
+echo "  Update complete!"
+echo "================================"
+''')
+run('chmod +x chroot/usr/local/bin/ridos-update')
 print("RIDOS files installed successfully")
