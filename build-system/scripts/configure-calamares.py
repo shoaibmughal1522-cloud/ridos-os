@@ -1,0 +1,183 @@
+#!/usr/bin/env python3
+"""Configure Calamares installer for RIDOS OS"""
+import os, subprocess
+
+def write(path, content):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, 'w') as f:
+        f.write(content)
+    print(f"Written: {path}")
+
+def run(cmd):
+    return subprocess.run(cmd, shell=True)
+
+os.makedirs('chroot/etc/calamares/branding/ridos', exist_ok=True)
+os.makedirs('chroot/etc/calamares/modules', exist_ok=True)
+
+write('chroot/etc/calamares/settings.conf', '''---
+modules-search: [ local ]
+
+sequence:
+  - show:
+      - welcome
+      - locale
+      - keyboard
+      - partition
+      - users
+      - summary
+  - exec:
+      - partition
+      - mount
+      - unpackfs
+      - machineid
+      - fstab
+      - locale
+      - keyboard
+      - users
+      - displaymanager
+      - networkcfg
+      - grubcfg
+      - bootloader
+      - finished
+
+branding: ridos
+prompt-install: false
+dont-chroot: false
+''')
+
+write('chroot/etc/calamares/branding/ridos/branding.desc', '''---
+componentName: ridos
+welcomeStyleCalamares: true
+
+strings:
+  productName: RIDOS OS
+  shortProductName: RIDOS
+  version: "1.1.0"
+  shortVersion: "1.1"
+  versionedName: "RIDOS OS 1.1.0"
+  shortVersionedName: "RIDOS 1.1"
+  bootloaderEntryName: RIDOS
+  productUrl: "https://github.com/alexeaiskinder-mea/ridos-os"
+  supportUrl: "https://github.com/alexeaiskinder-mea/ridos-os/issues"
+  releaseNotesUrl: "https://github.com/alexeaiskinder-mea/ridos-os"
+
+images:
+  productLogo: "logo.png"
+  productIcon: "logo.png"
+  productWelcome: "languages.png"
+
+slideshow: "show.qml"
+
+style:
+  sidebarBackground: "#1E1B4B"
+  sidebarText: "#FFFFFF"
+  sidebarTextSelect: "#6B21A8"
+''')
+
+write('chroot/etc/calamares/branding/ridos/show.qml', '''import QtQuick 2.0
+
+Rectangle {
+    color: "#1E1B4B"
+    width: 800
+    height: 500
+
+    Column {
+        anchors.centerIn: parent
+        spacing: 20
+
+        Text {
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: "RIDOS OS"
+            color: "#C4B5FD"
+            font.pointSize: 36
+            font.bold: true
+        }
+        Text {
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: "v1.1.0 Baghdad"
+            color: "#E9D5FF"
+            font.pointSize: 16
+        }
+        Text {
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: "AI-Powered Linux for IT Professionals"
+            color: "#DDD6FE"
+            font.pointSize: 14
+        }
+    }
+}
+''')
+
+write('chroot/etc/calamares/modules/partition.conf', '''---
+efiSystemPartition: "/boot/efi"
+defaultPartitionTableType: gpt
+availableFileSystemTypes: [ ext4, btrfs, xfs ]
+initialPartitioningChoice: erase
+initialSwapChoice: small
+''')
+
+write('chroot/etc/calamares/modules/users.conf', '''---
+defaultGroups:
+  - sudo
+  - audio
+  - video
+  - netdev
+  - plugdev
+  - bluetooth
+  - storage
+autologinGroup: autologin
+doAutologin: false
+sudoersGroup: sudo
+setRootPassword: true
+passwordRequirements:
+  minLength: 6
+''')
+
+write('chroot/etc/calamares/modules/unpackfs.conf', '''---
+unpack:
+  - source: "/run/live/medium/live/filesystem.squashfs"
+    sourcefs: "squashfs"
+    destination: ""
+''')
+
+write('chroot/etc/calamares/modules/displaymanager.conf', '''---
+displaymanagers:
+  - lightdm
+defaultDesktopEnvironment:
+  executable: "startxfce4"
+  desktopFile: "xfce.desktop"
+''')
+
+write('chroot/etc/calamares/modules/bootloader.conf', '''---
+efiBootLoader: "grub"
+grubInstall: "grub-install"
+grubMkconfig: "update-grub"
+grubCfg: "/boot/grub/grub.cfg"
+grubProbe: "grub-probe"
+efiInstallerPath: "/usr/bin/efibootmgr"
+installEFIFallback: true
+''')
+
+write('chroot/etc/default/grub',
+    'GRUB_DEFAULT=0\n'
+    'GRUB_TIMEOUT=5\n'
+    'GRUB_DISTRIBUTOR="RIDOS OS"\n'
+    'GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"\n'
+    'GRUB_CMDLINE_LINUX=""\n')
+
+# Generate logo
+run('convert -size 200x200 gradient:"#6B21A8-#1E1B4B" '
+    '-font DejaVu-Sans-Bold -pointsize 32 '
+    '-fill white -gravity center -annotate 0 "RIDOS" '
+    'chroot/etc/calamares/branding/ridos/logo.png 2>/dev/null || '
+    'convert -size 200x200 xc:"#6B21A8" '
+    '-fill white -gravity center -annotate 0 "RIDOS" '
+    'chroot/etc/calamares/branding/ridos/logo.png 2>/dev/null || true')
+
+run('cp chroot/etc/calamares/branding/ridos/logo.png '
+    'chroot/etc/calamares/branding/ridos/languages.png 2>/dev/null || true')
+
+if os.path.exists('chroot/usr/bin/calamares'):
+    print("Calamares installed and configured successfully")
+else:
+    print("WARNING: Calamares binary not found - config written but installer unavailable")
