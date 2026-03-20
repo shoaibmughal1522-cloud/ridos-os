@@ -244,23 +244,32 @@ def run_network_analyzer():
 
     # Interfaces
     print_section("Network Interfaces","واجهات الشبكة")
-    iface_output = run_cmd("ip addr show")
-    net_data['interfaces'] = iface_output[:1000]
-    for line in iface_output.split('\n')[:20]:
-        if 'inet ' in line or ': ' in line and 'lo' not in line:
-            print(f"  {CYAN}{line.strip()}{RESET}")
+    try:
+        iface_output = run_cmd("ip addr show") or "N/A"
+        net_data['interfaces'] = iface_output[:1000]
+        for line in iface_output.split('\n')[:20]:
+            if line.strip() and ('inet ' in line or (': ' in line and 'lo' not in line)):
+                print(f"  {CYAN}{line.strip()}{RESET}")
+    except Exception as e:
+        print(f"  {YELLOW}Interface check skipped: {e}{RESET}")
 
     # Gateway & routing
     print_section("Routing Table","جدول التوجيه")
-    route_out = run_cmd("ip route show")
-    net_data['routing'] = route_out
-    print(f"  {CYAN}{route_out[:400]}{RESET}")
+    try:
+        route_out = run_cmd("ip route show") or "N/A"
+        net_data['routing'] = route_out
+        print(f"  {CYAN}{route_out[:400]}{RESET}")
+    except Exception as e:
+        print(f"  {YELLOW}Routing check skipped: {e}{RESET}")
 
     # DNS
     print_section("DNS Configuration","إعداد DNS")
-    dns_out = run_cmd("cat /etc/resolv.conf")
-    net_data['dns'] = dns_out
-    print(f"  {CYAN}{dns_out[:200]}{RESET}")
+    try:
+        dns_out = run_cmd("cat /etc/resolv.conf") or "N/A"
+        net_data['dns'] = dns_out
+        print(f"  {CYAN}{dns_out[:200]}{RESET}")
+    except Exception as e:
+        print(f"  {YELLOW}DNS check skipped: {e}{RESET}")
 
     # Connectivity tests
     print_section("Connectivity Tests","اختبارات الاتصال")

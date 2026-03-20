@@ -91,13 +91,21 @@ jobs:
           # Browsers
           sudo chroot chroot apt-get install -y firefox-esr
 
-          # Calamares installer
-          sudo chroot chroot apt-get install -y calamares \
-            && echo "Calamares OK" || echo "Calamares FAILED"
-          sudo chroot chroot apt-get install -y \
-            qml-module-qtquick2 qml-module-qtquick-controls2 \
-            qml-module-qtquick-layouts python3-pyqt5 \
-            efibootmgr os-prober || true
+          # Calamares installer - needs /proc /sys /dev mounted
+          sudo mount --bind /dev  chroot/dev  2>/dev/null || true
+          sudo mount --bind /proc chroot/proc 2>/dev/null || true
+          sudo mount --bind /sys  chroot/sys  2>/dev/null || true
+          sudo chroot chroot apt-get install -y --no-install-recommends calamares             && echo "✅ Calamares installed!" || echo "❌ Calamares FAILED"
+          sudo chroot chroot apt-get install -y             qml-module-qtquick2 qml-module-qtquick-controls2             qml-module-qtquick-layouts python3-pyqt5             efibootmgr os-prober || true
+          sudo umount chroot/sys  2>/dev/null || true
+          sudo umount chroot/proc 2>/dev/null || true
+          sudo umount chroot/dev  2>/dev/null || true
+          # Verify
+          if [ -f chroot/usr/bin/calamares ]; then
+            echo "✅ Calamares binary confirmed at /usr/bin/calamares"
+          else
+            echo "❌ Calamares binary NOT found - installer will use bash fallback"
+          fi
 
           # Dev and IT tools
           sudo chroot chroot apt-get install -y \
