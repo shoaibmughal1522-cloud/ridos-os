@@ -242,101 +242,114 @@ os.makedirs('chroot/etc/calamares/modules', exist_ok=True)
 
 # Create grub-install wrapper script that handles mounting
 write('chroot/usr/local/bin/ridos-grub-install', '''#!/bin/bash
-# RIDOS GRUB installer
-# Calamares 3.2 uses /tmp/calamares-root as mount point
+LOG="/tmp/ridos-grub.log"
+exec > "$LOG" 2>&1
+set -x
 
-# Log everything
-exec >> /tmp/ridos-grub-install.log 2>&1
-echo "=== RIDOS GRUB Install started ==="
+echo "=== RIDOS GRUB Install ==="
 echo "Date: $(date)"
+echo "Running as: $(whoami)"
+echo ""
 
-# Show all current mounts for debugging
-echo "=== Current mounts ==="
-mount | grep -v "^cgroup\|^sysfs\|^proc\|^tmpfs\|^devpts\|^mqueue\|^hugetlb"
+# Show all mounts
+echo "=== All mounts ==="
+cat /proc/mounts
+echo ""
 
-# Find target - check ALL possible locations
+# Find target - calamares uses /tmp/calamares-root-XXXXXXXX
+echo "=== Searching for target ==="
 TARGET=""
 
-# Method 1: Calamares 3.2 uses /tmp/calamares-root-XXXXXXXX
-TARGET=$(ls -d /tmp/calamares-root-* 2>/dev/null | head -1)
-if [ -n "$TARGET" ] && [ -d "$TARGET/boot" ]; then
-    echo "Found Calamares root: $TARGET"
+# Search /tmp for calamares mount
+for d in /tmp/calamares-root-*; do
+    echo "Checking: $d"
+    if [ -d "$d" ] && [ -d "$d/etc" ] && [ -d "$d/bin" ]; then
+        TARGET="$d"
+        echo "FOUND: $TARGET"
+        break
+    fi
+done
+
+# Try /tmp/calamares-root without suffix
+if [ -z "$TARGET" ] && [ -d "/tmp/calamares-root" ] && [ -d "/tmp/calamares-root/etc" ]; then
+    TARGET="/tmp/calamares-root"
+    echo "FOUND plain: $TARGET"
 fi
 
-# Also check plain path
+# Scan all /tmp subdirs
 if [ -z "$TARGET" ]; then
-    for path in /tmp/calamares-root /tmp/calamares_root /mnt/calamares /mnt; do
-        if mountpoint -q "$path" 2>/dev/null && [ -d "$path/boot" ]; then
-            TARGET="$path"
-            echo "Found via standard path: $TARGET"
+    echo "Scanning /tmp..."
+    for d in /tmp/*/; do
+        if [ -d "${d}etc" ] && [ -d "${d}bin" ] && [ -d "${d}boot" ]; then
+            TARGET="${d%/}"
+            echo "FOUND via scan: $TARGET"
             break
         fi
     done
 fi
 
-# Method 2: scan all mounts for a Linux root
+# Last resort: scan all mounts for linux root
 if [ -z "$TARGET" ]; then
-    while IFS= read -r line; do
-        mnt=$(echo "$line" | awk "{print \$2}")
-        if [ -d "$mnt/boot" ] && [ -d "$mnt/etc" ] && [ -d "$mnt/bin" ]; then
-            if [ "$mnt" != "/" ]; then
-                TARGET="$mnt"
-                echo "Found via mount scan: $TARGET"
-                break
-            fi
+    echo "Scanning all mounts..."
+    while read -r dev mnt rest; do
+        if [ "$mnt" != "/" ] && [ -d "$mnt/etc" ] && [ -d "$mnt/boot" ] && [ -d "$mnt/bin" ]; then
+            TARGET="$mnt"
+            echo "FOUND via mounts: $TARGET"
+            break
         fi
     done < /proc/mounts
 fi
 
-# Method 3: find from /dev/sda1
+echo ""
+echo "=== TARGET: $TARGET ==="
+
 if [ -z "$TARGET" ]; then
-    mkdir -p /mnt/ridos-target
-    mount /dev/sda1 /mnt/ridos-target 2>/dev/null
-    if [ -d "/mnt/ridos-target/boot" ]; then
-        TARGET="/mnt/ridos-target"
-        echo "Mounted /dev/sda1 manually: $TARGET"
+    echo "FATAL: No target found!"
+    # Mount /dev/sda1 manually as last resort
+    echo "Trying manual mount of /dev/sda1..."
+    mkdir -p /mnt/ridos-manual
+    mount /dev/sda1 /mnt/ridos-manual 2>&1
+    if [ -d "/mnt/ridos-manual/boot" ]; then
+        TARGET="/mnt/ridos-manual"
+        echo "Manual mount OK: $TARGET"
+    else
+        echo "Manual mount failed too"
+        cat "$LOG"
+        exit 1
     fi
 fi
 
-echo "Target found: $TARGET"
-
-if [ -z "$TARGET" ]; then
-    echo "FATAL: Cannot find target mount point"
-    echo "Available mounts:"
-    cat /proc/mounts
-    exit 1
-fi
-
 # Mount required filesystems
-echo "Mounting /dev /proc /sys..."
-mount --bind /dev     "$TARGET/dev"     2>/dev/null || true
-mount --bind /dev/pts "$TARGET/dev/pts" 2>/dev/null || true
-mount --bind /proc    "$TARGET/proc"    2>/dev/null || true
-mount --bind /sys     "$TARGET/sys"     2>/dev/null || true
+echo "=== Mounting /dev /proc /sys ==="
+mount --bind /dev     "$TARGET/dev"     && echo "OK: /dev" || echo "WARN: /dev failed"
+mount --bind /dev/pts "$TARGET/dev/pts" && echo "OK: /dev/pts" || echo "WARN: /dev/pts failed"
+mount --bind /proc    "$TARGET/proc"    && echo "OK: /proc" || echo "WARN: /proc failed"
+mount --bind /sys     "$TARGET/sys"     && echo "OK: /sys" || echo "WARN: /sys failed"
 
-# Verify /dev is mounted
-if [ ! -e "$TARGET/dev/sda" ]; then
-    echo "WARNING: /dev/sda not visible in target, trying udev..."
-    udevadm trigger 2>/dev/null || true
-    sleep 1
-fi
+echo ""
+echo "=== /dev/sda in target? ==="
+ls -la "$TARGET/dev/sda" 2>&1 || echo "NOT FOUND"
 
-echo "Running grub-install..."
+echo ""
+echo "=== Running grub-install ==="
 chroot "$TARGET" grub-install --target=i386-pc --recheck --force /dev/sda
 RESULT=$?
 echo "grub-install exit code: $RESULT"
 
-echo "Running update-grub..."
+echo ""
+echo "=== Running update-grub ==="
 chroot "$TARGET" update-grub
 echo "update-grub exit code: $?"
 
-# Unmount
-umount "$TARGET/sys"     2>/dev/null || true
-umount "$TARGET/proc"    2>/dev/null || true
-umount "$TARGET/dev/pts" 2>/dev/null || true
-umount "$TARGET/dev"     2>/dev/null || true
+echo ""
+echo "=== Unmounting ==="
+umount "$TARGET/sys"     2>&1 || true
+umount "$TARGET/proc"    2>&1 || true
+umount "$TARGET/dev/pts" 2>&1 || true
+umount "$TARGET/dev"     2>&1 || true
 
-echo "=== RIDOS GRUB Install finished with code $RESULT ==="
+echo "=== Done with code $RESULT ==="
+cat "$LOG"
 exit $RESULT
 ''')
 
@@ -344,14 +357,19 @@ import subprocess
 subprocess.run('chmod +x chroot/usr/local/bin/ridos-grub-install', shell=True)
 print("GRUB install script created")
 
+
+import subprocess
+subprocess.run('chmod +x chroot/usr/local/bin/ridos-grub-install', shell=True)
+print("GRUB install script created")
+
 write('chroot/etc/calamares/modules/shellprocess.conf', '''---
 dontChroot: true
-timeout: 180
+timeout: 300
 verbose: true
 
 script:
-  - command: "/usr/local/bin/ridos-grub-install"
-    timeout: 180
+  - command: "bash -c 'T=$(ls -d /tmp/calamares-root-* 2>/dev/null | head -1); echo TARGET=$T; mount --bind /dev $T/dev; mount --bind /proc $T/proc; mount --bind /sys $T/sys; chroot $T grub-install --target=i386-pc --recheck --force /dev/sda; R=$?; chroot $T update-grub; umount $T/sys $T/proc $T/dev; exit $R'"
+    timeout: 300
 ''')
 
 # Remove calamares-settings-debian which overrides our config
