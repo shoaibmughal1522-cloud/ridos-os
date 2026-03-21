@@ -242,49 +242,101 @@ os.makedirs('chroot/etc/calamares/modules', exist_ok=True)
 
 # Create grub-install wrapper script that handles mounting
 write('chroot/usr/local/bin/ridos-grub-install', '''#!/bin/bash
-# RIDOS GRUB installer - called by Calamares shellprocess
-# Find the target root mount
-TARGET=""
-for path in /tmp/calamares-root /mnt/ridos-install /target; do
-    if [ -d "$path/boot" ]; then
-        TARGET="$path"
-        break
-    fi
-done
+# RIDOS GRUB installer
+# Calamares 3.2 uses /tmp/calamares-root as mount point
 
-if [ -z "$TARGET" ]; then
-    # Try to find it from mounts
-    TARGET=$(findmnt -n -o TARGET --target /boot 2>/dev/null || echo "")
+# Log everything
+exec >> /tmp/ridos-grub-install.log 2>&1
+echo "=== RIDOS GRUB Install started ==="
+echo "Date: $(date)"
+
+# Show all current mounts for debugging
+echo "=== Current mounts ==="
+mount | grep -v "^cgroup\|^sysfs\|^proc\|^tmpfs\|^devpts\|^mqueue\|^hugetlb"
+
+# Find target - check ALL possible locations
+TARGET=""
+
+# Method 1: Calamares 3.2 uses /tmp/calamares-root-XXXXXXXX
+TARGET=$(ls -d /tmp/calamares-root-* 2>/dev/null | head -1)
+if [ -n "$TARGET" ] && [ -d "$TARGET/boot" ]; then
+    echo "Found Calamares root: $TARGET"
 fi
 
+# Also check plain path
 if [ -z "$TARGET" ]; then
-    echo "ERROR: Cannot find target mount point"
+    for path in /tmp/calamares-root /tmp/calamares_root /mnt/calamares /mnt; do
+        if mountpoint -q "$path" 2>/dev/null && [ -d "$path/boot" ]; then
+            TARGET="$path"
+            echo "Found via standard path: $TARGET"
+            break
+        fi
+    done
+fi
+
+# Method 2: scan all mounts for a Linux root
+if [ -z "$TARGET" ]; then
+    while IFS= read -r line; do
+        mnt=$(echo "$line" | awk "{print \$2}")
+        if [ -d "$mnt/boot" ] && [ -d "$mnt/etc" ] && [ -d "$mnt/bin" ]; then
+            if [ "$mnt" != "/" ]; then
+                TARGET="$mnt"
+                echo "Found via mount scan: $TARGET"
+                break
+            fi
+        fi
+    done < /proc/mounts
+fi
+
+# Method 3: find from /dev/sda1
+if [ -z "$TARGET" ]; then
+    mkdir -p /mnt/ridos-target
+    mount /dev/sda1 /mnt/ridos-target 2>/dev/null
+    if [ -d "/mnt/ridos-target/boot" ]; then
+        TARGET="/mnt/ridos-target"
+        echo "Mounted /dev/sda1 manually: $TARGET"
+    fi
+fi
+
+echo "Target found: $TARGET"
+
+if [ -z "$TARGET" ]; then
+    echo "FATAL: Cannot find target mount point"
+    echo "Available mounts:"
+    cat /proc/mounts
     exit 1
 fi
 
-echo "Installing GRUB to target: $TARGET"
-
 # Mount required filesystems
+echo "Mounting /dev /proc /sys..."
 mount --bind /dev     "$TARGET/dev"     2>/dev/null || true
 mount --bind /dev/pts "$TARGET/dev/pts" 2>/dev/null || true
 mount --bind /proc    "$TARGET/proc"    2>/dev/null || true
 mount --bind /sys     "$TARGET/sys"     2>/dev/null || true
-mount --bind /run     "$TARGET/run"     2>/dev/null || true
 
-# Run grub-install inside chroot
+# Verify /dev is mounted
+if [ ! -e "$TARGET/dev/sda" ]; then
+    echo "WARNING: /dev/sda not visible in target, trying udev..."
+    udevadm trigger 2>/dev/null || true
+    sleep 1
+fi
+
+echo "Running grub-install..."
 chroot "$TARGET" grub-install --target=i386-pc --recheck --force /dev/sda
 RESULT=$?
+echo "grub-install exit code: $RESULT"
 
-# Run update-grub
+echo "Running update-grub..."
 chroot "$TARGET" update-grub
+echo "update-grub exit code: $?"
 
 # Unmount
-umount "$TARGET/run"     2>/dev/null || true
 umount "$TARGET/sys"     2>/dev/null || true
 umount "$TARGET/proc"    2>/dev/null || true
 umount "$TARGET/dev/pts" 2>/dev/null || true
 umount "$TARGET/dev"     2>/dev/null || true
 
+echo "=== RIDOS GRUB Install finished with code $RESULT ==="
 exit $RESULT
 ''')
 
