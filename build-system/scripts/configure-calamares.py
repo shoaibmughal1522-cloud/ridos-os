@@ -240,16 +240,66 @@ run('cp chroot/etc/calamares/branding/ridos/logo.png '
 import os
 os.makedirs('chroot/etc/calamares/modules', exist_ok=True)
 
+# Create grub-install wrapper script that handles mounting
+write('chroot/usr/local/bin/ridos-grub-install', '''#!/bin/bash
+# RIDOS GRUB installer - called by Calamares shellprocess
+# Find the target root mount
+TARGET=""
+for path in /tmp/calamares-root /mnt/ridos-install /target; do
+    if [ -d "$path/boot" ]; then
+        TARGET="$path"
+        break
+    fi
+done
+
+if [ -z "$TARGET" ]; then
+    # Try to find it from mounts
+    TARGET=$(findmnt -n -o TARGET --target /boot 2>/dev/null || echo "")
+fi
+
+if [ -z "$TARGET" ]; then
+    echo "ERROR: Cannot find target mount point"
+    exit 1
+fi
+
+echo "Installing GRUB to target: $TARGET"
+
+# Mount required filesystems
+mount --bind /dev     "$TARGET/dev"     2>/dev/null || true
+mount --bind /dev/pts "$TARGET/dev/pts" 2>/dev/null || true
+mount --bind /proc    "$TARGET/proc"    2>/dev/null || true
+mount --bind /sys     "$TARGET/sys"     2>/dev/null || true
+mount --bind /run     "$TARGET/run"     2>/dev/null || true
+
+# Run grub-install inside chroot
+chroot "$TARGET" grub-install --target=i386-pc --recheck --force /dev/sda
+RESULT=$?
+
+# Run update-grub
+chroot "$TARGET" update-grub
+
+# Unmount
+umount "$TARGET/run"     2>/dev/null || true
+umount "$TARGET/sys"     2>/dev/null || true
+umount "$TARGET/proc"    2>/dev/null || true
+umount "$TARGET/dev/pts" 2>/dev/null || true
+umount "$TARGET/dev"     2>/dev/null || true
+
+exit $RESULT
+''')
+
+import subprocess
+subprocess.run('chmod +x chroot/usr/local/bin/ridos-grub-install', shell=True)
+print("GRUB install script created")
+
 write('chroot/etc/calamares/modules/shellprocess.conf', '''---
-dontChroot: false
-timeout: 120
+dontChroot: true
+timeout: 180
 verbose: true
 
 script:
-  - command: "grub-install --target=i386-pc --force /dev/sda"
-    timeout: 120
-  - command: "update-grub"
-    timeout: 60
+  - command: "/usr/local/bin/ridos-grub-install"
+    timeout: 180
 ''')
 
 # Remove calamares-settings-debian which overrides our config
